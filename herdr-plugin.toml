@@ -9,7 +9,7 @@
 
 id = "huketo.hitl"
 name = "Herdr HITL"
-version = "0.1.0"
+version = "0.1.1"
 min_herdr_version = "0.8.0"
 description = "Block a coding agent on a human decision delivered over Telegram or Discord."
 platforms = ["linux", "macos", "windows"]

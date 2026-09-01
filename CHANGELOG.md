@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.1](https://github.com/huketo/herdr-hitl/compare/v0.1.0...v0.1.1) (2026-09-01)
+
+
+### Bug fixes
+
+* **paths:** resolve one config and one socket whatever launched the binary ([#12](https://github.com/huketo/herdr-hitl/issues/12)) ([f52566a](https://github.com/huketo/herdr-hitl/commit/f52566a618f42268b09b24921d3f2ad3f382f8d6))
+
+
+### Documentation
+
+* fix the mermaid notes and stop the token placeholder tripping scanners ([#10](https://github.com/huketo/herdr-hitl/issues/10)) ([92e1cf0](https://github.com/huketo/herdr-hitl/commit/92e1cf0cdd2dcfd357552d6f56e2699893a90586))
+
 ## 0.1.0 (2026-09-01)
 
 
