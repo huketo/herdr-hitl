@@ -1,0 +1,82 @@
+# Herdr plugin manifest for herdr-hitl.
+#
+# User-editable configuration does NOT live here. It lives in the plugin config
+# directory, which you can print with:
+#
+#   herdr plugin config-dir huketo.hitl
+#
+# Put `config.toml` and `.env` there. See README.md and docs/setup-*.md.
+
+id = "huketo.hitl"
+name = "Herdr HITL"
+version = "0.1.0"
+min_herdr_version = "0.8.0"
+description = "Block a coding agent on a human decision delivered over Telegram or Discord."
+platforms = ["linux", "macos", "windows"]
+
+# Build commands run on `herdr plugin install` (after the preview is confirmed,
+# before the plugin is registered). They do NOT run on `herdr plugin link` —
+# local authors build their own working tree, e.g. with `make build`.
+# Requires the Go toolchain on PATH.
+[[build]]
+command = ["go", "build", "-trimpath", "-ldflags", "-s -w", "-o", "bin/herdr-hitl", "./cmd/herdr-hitl"]
+
+# One-shot startup hook: spawn the detached daemon and exit immediately.
+# `daemon start` returns as soon as the daemon answers a probe, which matches
+# Herdr's startup-hook contract (initialize, then exit — not a supervised
+# long-running process).
+[[startup]]
+command = ["bin/herdr-hitl", "daemon", "start"]
+
+[[actions]]
+id = "doctor"
+title = "Diagnose HITL"
+description = "Check config, transports, daemon reachability, and credentials."
+contexts = ["global"]
+command = ["bin/herdr-hitl", "doctor"]
+
+[[actions]]
+id = "status"
+title = "HITL daemon status"
+description = "Show daemon PID, socket, live transports, and pending question count."
+contexts = ["global"]
+command = ["bin/herdr-hitl", "daemon", "status"]
+
+[[actions]]
+id = "restart"
+title = "Restart HITL daemon"
+description = "Stop the daemon and start a fresh one, picking up config changes."
+contexts = ["global"]
+command = ["bin/herdr-hitl", "daemon", "restart"]
+
+[[actions]]
+id = "stop"
+title = "Stop HITL daemon"
+description = "Shut the daemon down and release the messenger connections."
+contexts = ["global"]
+command = ["bin/herdr-hitl", "daemon", "stop"]
+
+[[actions]]
+id = "pending"
+title = "List pending questions"
+description = "Show every question currently waiting on a human answer."
+contexts = ["global"]
+command = ["bin/herdr-hitl", "pending"]
+
+[[actions]]
+id = "install-cli"
+title = "Install herdr-hitl on PATH"
+description = "Symlink the plugin binary into a PATH directory so agents can call it directly."
+contexts = ["global"]
+command = ["bin/herdr-hitl", "install-cli"]
+
+[[actions]]
+id = "config-init"
+title = "Write a starter config"
+description = "Create config.toml in the plugin config directory if it does not exist."
+contexts = ["global"]
+command = ["bin/herdr-hitl", "config", "init"]
+
+# No [[panes]] and no [[link_handlers]]: this plugin is deliberately GUI-free.
+# The agent-facing surface is the blocking `herdr-hitl ask` CLI; the human-facing
+# surface is Telegram or Discord.
