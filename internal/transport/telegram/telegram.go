@@ -68,8 +68,12 @@ type Transport struct {
 	// answer.
 	allowed map[string]struct{}
 
-	mu        sync.Mutex
-	username  string
+	mu       sync.Mutex
+	username string
+	// chatType is what getChat reported: "private", "group", "supergroup",
+	// or "channel". A channel accepts inline keyboards and nothing else, so
+	// it decides whether a free-text answer is even possible.
+	chatType  string
 	posted    map[string]*posted
 	byMessage map[int]string
 	cancel    context.CancelFunc
@@ -144,6 +148,35 @@ func parseChatID(raw string) any {
 	return strings.TrimSpace(raw)
 }
 
+// chatTypeChannel is the one chat kind that rejects every reply markup except
+// an inline keyboard. Telegram answers a ForceReply sent to a channel with
+// "400 Bad Request: inline keyboard expected", and a channel has no reply
+// affordance for its readers at all, so a free-text answer cannot arrive.
+const chatTypeChannel = "channel"
+
+// lookupChatType asks Telegram what kind of chat the destination is.
+//
+// A failure is not fatal: the answer only relaxes or tightens the reply
+// markup, and a private chat — the common case — is the permissive one. An
+// unknown type therefore behaves exactly as before this call existed.
+func (t *Transport) lookupChatType(ctx context.Context) string {
+	chat, err := t.api.GetChat(ctx, &bot.GetChatParams{ChatID: t.chatID})
+	if err != nil {
+		t.log.Warn("could not determine the chat type; assuming it accepts text replies",
+			"chat", t.chatLabel, "error", err)
+		return ""
+	}
+	return string(chat.Type)
+}
+
+// acceptsTextReplies reports whether a human in this chat can answer by
+// typing. Callers must hold no lock; the value is fixed at Start.
+func (t *Transport) acceptsTextReplies() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.chatType != chatTypeChannel
+}
+
 // Name identifies the transport in configuration and CLI flags.
 func (t *Transport) Name() string { return config.TransportTelegram }
 
@@ -156,13 +189,21 @@ func (t *Transport) Start(ctx context.Context) error {
 
 	// getUpdates fails with 409 for as long as a webhook is registered, and a
 	// leftover webhook from an earlier setup is a common way to get there.
-	if _, err := t.api.DeleteWebhook(initCtx, &bot.DeleteWebhookParams{}); err != nil {
+	//
+	// The params must be nil, not &DeleteWebhookParams{}. The client encodes
+	// every call as a multipart form; a struct whose only field is
+	// `omitempty` and unset produces a form with zero fields, and Telegram
+	// answers that with 400 and an empty body, which surfaces as
+	// "unexpected end of JSON input". Passing nil skips form building
+	// entirely, which is how the client's own parameterless calls work.
+	if _, err := t.api.DeleteWebhook(initCtx, nil); err != nil {
 		return fmt.Errorf("telegram: delete webhook: %w", err)
 	}
 	me, err := t.api.GetMe(initCtx)
 	if err != nil {
 		return fmt.Errorf("telegram: get me: %w", err)
 	}
+	chatType := t.lookupChatType(initCtx)
 
 	loopCtx, stop := context.WithCancel(ctx)
 	done := make(chan struct{})
@@ -174,6 +215,7 @@ func (t *Transport) Start(ctx context.Context) error {
 		return errors.New("telegram: already started")
 	}
 	t.username = me.Username
+	t.chatType = chatType
 	t.cancel = stop
 	t.done = done
 	t.mu.Unlock()
@@ -183,7 +225,11 @@ func (t *Transport) Start(ctx context.Context) error {
 		t.api.Start(loopCtx)
 	}()
 
-	t.log.Info("telegram transport live", "bot", me.Username, "chat", t.chatLabel)
+	t.log.Info("telegram transport live", "bot", me.Username, "chat", t.chatLabel, "chat_type", chatType)
+	if chatType == chatTypeChannel {
+		t.log.Warn("telegram target is a channel; only button answers are possible",
+			"chat", t.chatLabel)
+	}
 	return nil
 }
 
@@ -206,10 +252,17 @@ func (t *Transport) Close() error {
 // includes the bot token.
 func (t *Transport) Describe() string {
 	t.mu.Lock()
-	username := t.username
+	username, chatType := t.username, t.chatType
 	t.mu.Unlock()
 	if username == "" {
 		return fmt.Sprintf("telegram: chat %s (not connected)", t.chatLabel)
+	}
+	// A channel is worth naming in doctor output: it silently rules out every
+	// free-text answer, and the first ask without -c is otherwise where the
+	// operator finds out.
+	if chatType == chatTypeChannel {
+		return fmt.Sprintf("telegram: @%s -> channel %s (buttons only; free-text answers are impossible)",
+			username, t.chatLabel)
 	}
 	return fmt.Sprintf("telegram: @%s -> chat %s", username, t.chatLabel)
 }
@@ -234,6 +287,19 @@ func (t *Transport) handleAPIError(err error) {
 // Post delivers req. Attachments go first so the question, with its keyboard,
 // is the last thing in the chat.
 func (t *Transport) Post(ctx context.Context, req *hitl.Request) error {
+	textReplies := t.acceptsTextReplies()
+
+	// A channel has buttons and nothing else. Posting a question whose only
+	// answer is typed would put an unanswerable message in the chat and then
+	// block the agent until its deadline, so refuse it while the operator can
+	// still act on the reason.
+	if !textReplies && req.WantsAnswer() && len(req.Choices) == 0 {
+		return fmt.Errorf(
+			"telegram: chat %s is a channel, which accepts button answers only; "+
+				"give the question choices with -c, or point telegram.chat_id at a "+
+				"private chat, group, or supergroup", t.chatLabel)
+	}
+
 	var failed []string
 	for _, att := range req.Attachments {
 		if err := t.sendAttachment(ctx, att); err != nil {
@@ -244,7 +310,7 @@ func (t *Transport) Post(ctx context.Context, req *hitl.Request) error {
 		}
 	}
 
-	q := composeQuestion(req, failed)
+	q := composeQuestion(req, failed, textReplies)
 	if q.Overflow {
 		if err := t.sendBody(ctx, req); err != nil {
 			t.log.Warn("body attachment upload failed", "request_id", req.ID, "error", err)
@@ -257,7 +323,7 @@ func (t *Transport) Post(ctx context.Context, req *hitl.Request) error {
 		ParseMode:          models.ParseModeHTML,
 		LinkPreviewOptions: &models.LinkPreviewOptions{IsDisabled: bot.True()},
 	}
-	if kb := keyboard(req); kb != nil {
+	if kb := keyboard(req, textReplies); kb != nil {
 		params.ReplyMarkup = kb
 	}
 
