@@ -73,11 +73,20 @@ func TestResolveFrom(t *testing.T) {
 			want: BuildInfo{Version: "0.2.0", Commit: "908f446", Date: "2026-09-01T07:03:23Z"},
 		},
 		{
-			// The Herdr [[build]] command: plain go build in a checkout that
-			// Herdr cloned without tags, so the toolchain has no version.
-			name: "fallback when the checkout has no tag",
+			name: "fallback when the toolchain reports devel",
 			in:   placeholders,
 			bi:   buildInfo("(devel)", map[string]string{"vcs.revision": rev, "vcs.time": "2026-09-01T07:03:23Z"}),
+			ok:   true,
+			want: BuildInfo{Version: fallbackVersion, Commit: "908f446", Date: "2026-09-01T07:03:23Z"},
+		},
+		{
+			// The Herdr [[build]] command. Herdr clones without tags, so the
+			// toolchain synthesises a pseudo-version from the commit — which
+			// says no more than the VCS stamp and hides the release.
+			name: "fallback beats a pseudo-version",
+			in:   placeholders,
+			bi: buildInfo("v0.0.0-20260901071544-21f4415ac06e",
+				map[string]string{"vcs.revision": rev, "vcs.time": "2026-09-01T07:03:23Z"}),
 			ok:   true,
 			want: BuildInfo{Version: fallbackVersion, Commit: "908f446", Date: "2026-09-01T07:03:23Z"},
 		},
@@ -120,11 +129,15 @@ func TestIsReleaseVersion(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]bool{
-		"":             false,
-		"(devel)":      false,
-		"v0.1.1":       true,
-		"v0.1.1+dirty": true,
-		"v1.2.3-rc.1":  true,
+		"":        false,
+		"(devel)": false,
+		// Synthesised from a commit because the checkout carries no tags,
+		// which is every Herdr plugin install.
+		"v0.0.0-20260901071544-21f4415ac06e":   false,
+		"v0.1.2-0.20260901071544-21f4415ac06e": false,
+		"v0.1.1":                               true,
+		"v0.1.1+dirty":                         true,
+		"v1.2.3-rc.1":                          true,
 	}
 	for in, want := range tests {
 		if got := isReleaseVersion(in); got != want {
