@@ -289,7 +289,7 @@ sequenceDiagram
 
     A->>C: exec, blocks on stdout
     C->>D: connect (unix socket / named pipe), ipc.OpAsk
-    Note over C,D: connection held open for the whole ask;<br/>client EOF cancels the question
+    Note over C,D: connection held open for the whole ask —<br/>client EOF cancels the question
     D->>M: Poster.Post — message + buttons + attachments
     M->>H: notification on phone
     H->>M: taps a button or types a reply

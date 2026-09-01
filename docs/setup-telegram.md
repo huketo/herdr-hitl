@@ -14,11 +14,7 @@ Open Telegram and message [@BotFather](https://t.me/BotFather):
 /newbot
 ```
 
-It asks for a display name (anything, e.g. `My HITL`) and a username that must end in `bot` (e.g. `myhitl_bot`). It answers with a token:
-
-```
-123456789:AAFxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
+It asks for a display name (anything, e.g. `My HITL`) and a username that must end in `bot` (e.g. `myhitl_bot`). It answers with a token: a numeric bot id, a colon, then a 35-character secret. This guide writes it as `<BOT_TOKEN>` throughout — a realistic-looking example would be picked up by secret scanners, in this repository and in yours.
 
 That token *is* the bot. Treat it as a password. If it leaks, `/revoke` in BotFather and take the new one.
 
@@ -36,7 +32,7 @@ Optional but worth it — turn off group privacy so nothing surprising happens l
 Now read the update queue:
 
 ```sh
-curl -s "https://api.telegram.org/bot123456789:AAFxxxx/getUpdates" | jq '.result[].message.chat'
+curl -s "https://api.telegram.org/bot<BOT_TOKEN>/getUpdates" | jq '.result[].message.chat'
 ```
 
 ```json

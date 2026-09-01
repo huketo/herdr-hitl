@@ -16,7 +16,9 @@ Telegram에서 [@BotFather](https://t.me/BotFather)에게 말을 겁니다.
 -> 사용자명을 정합니다. bot으로 끝나야 합니다 (예: my_hitl_bot)
 ```
 
-BotFather가 `123456789:AAFxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` 형태의 토큰을 줍니다. **이것이 봇의 비밀번호입니다.** 채팅에 붙여넣지 말고, 저장소에 커밋하지 마십시오.
+BotFather가 토큰을 줍니다 — 숫자로 된 봇 id, 콜론, 그리고 35자 비밀 문자열입니다. 이 문서는 그것을 전부 `<BOT_TOKEN>`으로 씁니다. 그럴듯한 예시를 적으면 이 저장소에서도 당신의 저장소에서도 시크릿 스캐너가 탐지하기 때문입니다.
+
+**이것이 봇의 비밀번호입니다.** 채팅에 붙여넣지 말고, 저장소에 커밋하지 마십시오.
 
 선택이지만 해두면 좋습니다:
 
@@ -30,7 +32,7 @@ BotFather가 `123456789:AAFxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` 형태의 토큰을
 봇에게 아무 메시지나 하나 보내십시오. `/start`면 됩니다. 그다음:
 
 ```sh
-curl -s "https://api.telegram.org/bot123456789:AAFxxxx/getUpdates" | jq '.result[].message.chat'
+curl -s "https://api.telegram.org/bot<BOT_TOKEN>/getUpdates" | jq '.result[].message.chat'
 ```
 
 ```json
@@ -89,7 +91,7 @@ allowed_user_ids = ["987654321"]
 토큰은 `.env`에 넣습니다:
 
 ```sh
-printf 'HITL_TELEGRAM_BOT_TOKEN=123456789:AAFxxxx\n' >> "$(herdr-hitl config path | xargs dirname)/.env"
+printf 'HITL_TELEGRAM_BOT_TOKEN=<BOT_TOKEN>\n' >> "$(herdr-hitl config path | xargs dirname)/.env"
 chmod 600 "$(herdr-hitl config path | xargs dirname)/.env"
 ```
 
