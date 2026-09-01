@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -12,8 +13,8 @@ import (
 //
 // It exists because the Herdr plugin build cannot stamp a version in. Herdr
 // runs `[[build]]` commands as argv with no shell, so the manifest cannot
-// compute `-X main.version=$(git describe)`, and a plugin installed at a tag
-// would otherwise report itself as "dev".
+// compute `-X main.version=$(git describe)`, and Herdr clones without tags so
+// the toolchain cannot infer one either.
 const fallbackVersion = "0.1.2" // x-release-please-version
 
 // devVersion is what main.go carries when no linker stamp was applied.
@@ -24,14 +25,11 @@ const devVersion = "dev"
 // Three build paths reach this binary and each knows a different amount:
 //
 //   - goreleaser stamps -X main.version/commit/date. Most precise; always wins.
-//   - `go install ...@v0.1.1` stamps nothing, but the module system records the
+//   - `go install ...@v0.1.2` stamps nothing, but the module system records the
 //     resolved version in the build info.
-//   - The Herdr plugin build runs plain `go build` in a git checkout. That
-//     records the revision but not the tag, so the version comes from
+//   - The Herdr plugin build runs plain `go build` in a tagless checkout. The
+//     toolchain has no version to record, so the version comes from
 //     fallbackVersion and the commit from the VCS stamp.
-//
-// Anything still unknown keeps its zero-ish placeholder rather than inventing
-// a value: reporting the wrong version is worse than admitting to none.
 func (b BuildInfo) Resolve() BuildInfo {
 	bi, ok := debug.ReadBuildInfo()
 	return resolveFrom(b, bi, ok)
@@ -51,10 +49,11 @@ func resolveFrom(b BuildInfo, bi *debug.BuildInfo, ok bool) BuildInfo {
 	}
 
 	vcs := vcsStamps(bi)
+
 	if !stamped {
 		if isReleaseVersion(bi.Main.Version) {
 			// The module system already encodes a dirty tree in this string
-			// (e.g. "v0.1.1+dirty"), so do not add a second marker.
+			// (e.g. "v0.1.2+dirty"), so do not add a second marker.
 			b.Version = strings.TrimPrefix(bi.Main.Version, "v")
 		} else {
 			b.Version = fallbackVersion
@@ -72,10 +71,32 @@ func resolveFrom(b BuildInfo, bi *debug.BuildInfo, ok bool) BuildInfo {
 	return b
 }
 
-// isReleaseVersion reports whether the module system resolved a real version.
-// A binary built from a working tree reports "(devel)", which says nothing.
+// pseudoVersion matches the suffix the module system appends when it has to
+// synthesise a version: a 14-digit UTC timestamp and a 12-character revision.
+//
+// The timestamp is introduced by a dash when there is no base tag
+// ("v0.0.0-20260901071544-21f4415ac06e") and by a dot when the pseudo-version
+// is built on one ("v0.1.2-0.20260901071544-21f4415ac06e"), so both separators
+// have to be accepted.
+var pseudoVersion = regexp.MustCompile(`[-.]\d{14}-[0-9a-f]{12}$`)
+
+// isReleaseVersion reports whether the module system resolved a version worth
+// showing.
+//
+// Two shapes are not. A binary built from a working tree reports "(devel)". A
+// binary built from a checkout with no tags — which is every Herdr plugin
+// install, because Herdr clones without them — gets a pseudo-version derived
+// from the commit. Neither tells the reader which release they are running,
+// and both say less than the VCS stamp reported separately, so
+// fallbackVersion is preferred over them.
 func isReleaseVersion(v string) bool {
-	return v != "" && v != "(devel)"
+	if v == "" || v == "(devel)" {
+		return false
+	}
+	// A modified tree adds build metadata ("+dirty") after the revision, which
+	// would otherwise push the suffix past the anchor.
+	base, _, _ := strings.Cut(v, "+")
+	return !pseudoVersion.MatchString(base)
 }
 
 type vcsInfo struct {
