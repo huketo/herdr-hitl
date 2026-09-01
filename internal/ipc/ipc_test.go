@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -115,7 +116,10 @@ func startServer(t *testing.T, h ipc.Handler) string {
 	return endpoint
 }
 
-// testEndpoint returns an endpoint short enough to bind.
+// endpointSeq makes each test endpoint unique without relying on the clock.
+var endpointSeq atomic.Uint64
+
+// testEndpoint returns an endpoint short enough to bind and unique per test.
 //
 // An earlier version used t.TempDir() and asserted in a comment that it was
 // short enough everywhere. It is not: macOS puts temp directories under
@@ -123,11 +127,16 @@ func startServer(t *testing.T, h ipc.Handler) string {
 // sockaddr_un limit and fails with "bind: invalid argument". These tests run
 // in parallel, so t.Setenv is unavailable and the path is built against a
 // short base directly.
+//
+// The Windows name is a counter, not a timestamp. Windows clock granularity
+// is coarse enough that two parallel tests read the same UnixNano, and winio
+// creates the first instance of a pipe exclusively — the loser gets "Access
+// is denied", which reads like a permissions bug and is a name collision.
 func testEndpoint(t *testing.T) string {
 	t.Helper()
 
 	if runtime.GOOS == "windows" {
-		return fmt.Sprintf(`\\.\pipe\herdr-hitl-test-%d`, time.Now().UnixNano())
+		return fmt.Sprintf(`\\.\pipe\herdr-hitl-test-%d-%d`, os.Getpid(), endpointSeq.Add(1))
 	}
 	// t.TempDir() is what this must not use: on macOS it returns a
 	// /var/folders/... path that overflows the sockaddr_un limit, which is
