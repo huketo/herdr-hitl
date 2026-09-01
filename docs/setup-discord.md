@@ -112,9 +112,9 @@ message_content_intent = true   # only if you want free-text replies here
 Token goes in `.env`:
 
 ```sh
-cp .env.example "$(herdr plugin config-dir huketo.hitl)/.env"
-chmod 600 "$(herdr plugin config-dir huketo.hitl)/.env"
-$EDITOR "$(herdr plugin config-dir huketo.hitl)/.env"   # fill HITL_DISCORD_BOT_TOKEN
+cp .env.example "$(dirname "$(herdr-hitl config path)")/.env"
+chmod 600 "$(dirname "$(herdr-hitl config path)")/.env"
+$EDITOR "$(dirname "$(herdr-hitl config path)")/.env"   # fill HITL_DISCORD_BOT_TOKEN
 ```
 
 ### `allowed_user_ids`

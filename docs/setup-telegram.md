@@ -92,9 +92,9 @@ allowed_user_ids = ["987654321"]
 Put the token in `.env`, not in `config.toml`:
 
 ```sh
-cp .env.example "$(herdr plugin config-dir huketo.hitl)/.env"
-chmod 600 "$(herdr plugin config-dir huketo.hitl)/.env"
-$EDITOR "$(herdr plugin config-dir huketo.hitl)/.env"   # fill HITL_TELEGRAM_BOT_TOKEN
+cp .env.example "$(dirname "$(herdr-hitl config path)")/.env"
+chmod 600 "$(dirname "$(herdr-hitl config path)")/.env"
+$EDITOR "$(dirname "$(herdr-hitl config path)")/.env"   # fill HITL_TELEGRAM_BOT_TOKEN
 ```
 
 Outside Herdr, `.env` goes in the config directory printed by `herdr-hitl config path`, or export `HITL_TELEGRAM_BOT_TOKEN` in your shell profile.

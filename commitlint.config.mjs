@@ -46,6 +46,8 @@ export default {
 			[
 				"cli",
 				"daemon",
+				"paths",
+				"herdrctl",
 				"broker",
 				"telegram",
 				"discord",

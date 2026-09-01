@@ -11,8 +11,8 @@ import (
 )
 
 func TestConfigDirPrecedence(t *testing.T) {
-	// HITL_CONFIG_DIR is the escape hatch for local experiments and must beat
-	// the directory Herdr injects.
+	// HITL_CONFIG_DIR is the escape hatch for local experiments and the only
+	// thing that moves the config directory.
 	t.Setenv(paths.EnvHerdrConfigDir, filepath.Join("herdr", "config"))
 	t.Setenv(paths.EnvConfigDir, filepath.Join("override", "config"))
 
@@ -25,16 +25,39 @@ func TestConfigDirPrecedence(t *testing.T) {
 	}
 }
 
-func TestConfigDirFallsBackToHerdr(t *testing.T) {
+func TestHerdrInjectedDirsDoNotMoveAnything(t *testing.T) {
+	// The daemon is a singleton per user because Telegram's update queue is
+	// single-consumer per bot token, and the socket that enforces that is
+	// derived from the state directory. Herdr sets these two variables for
+	// plugin actions and startup hooks but not for the pane an agent runs in,
+	// so honouring them would give those two callers different sockets and
+	// different configs — two daemons on one token.
 	t.Setenv(paths.EnvConfigDir, "")
-	t.Setenv(paths.EnvHerdrConfigDir, filepath.Join("herdr", "config"))
+	t.Setenv(paths.EnvStateDir, "")
 
-	got, err := paths.ConfigDir()
+	baseConfig, err := paths.ConfigDir()
 	if err != nil {
 		t.Fatalf("ConfigDir: %v", err)
 	}
-	if got != filepath.Clean(filepath.Join("herdr", "config")) {
-		t.Fatalf("ConfigDir() = %q, want the Herdr-injected value", got)
+	baseState, err := paths.StateDir()
+	if err != nil {
+		t.Fatalf("StateDir: %v", err)
+	}
+
+	t.Setenv(paths.EnvHerdrConfigDir, filepath.Join("herdr", "plugins", "config", "huketo.hitl"))
+	t.Setenv(paths.EnvHerdrStateDir, filepath.Join("herdr", "plugins", "huketo.hitl"))
+
+	if got, err := paths.ConfigDir(); err != nil || got != baseConfig {
+		t.Errorf("ConfigDir() = %q (err %v), want it unchanged at %q", got, err, baseConfig)
+	}
+	if got, err := paths.StateDir(); err != nil || got != baseState {
+		t.Errorf("StateDir() = %q (err %v), want it unchanged at %q", got, err, baseState)
+	}
+
+	// The value is still readable, because doctor reports a config file left
+	// behind in it.
+	if dir, ok := paths.HerdrConfigDir(); !ok || dir == "" {
+		t.Error("HerdrConfigDir() should still expose the injected value")
 	}
 }
 
@@ -54,7 +77,6 @@ func TestConfigDirFallsBackToXDG(t *testing.T) {
 func TestStateDirPrecedence(t *testing.T) {
 	state := t.TempDir()
 	t.Setenv(paths.EnvStateDir, state)
-	t.Setenv(paths.EnvHerdrStateDir, filepath.Join("herdr", "state"))
 
 	got, err := paths.StateDir()
 	if err != nil {

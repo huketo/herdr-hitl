@@ -27,7 +27,7 @@ go install github.com/huketo/herdr-hitl/cmd/herdr-hitl@latest
 메신저 하나를 설정하고 확인합니다:
 
 ```sh
-$EDITOR "$(herdr plugin config-dir huketo.hitl)/config.toml"
+$EDITOR "$(herdr-hitl config path)"
 herdr-hitl doctor
 herdr-hitl ask -t "연결 확인" -m "아무 글이나 보내주세요." --timeout 2m
 ```
@@ -66,7 +66,7 @@ Discord의 공유 서버는 **자격 증명 역할일 뿐 목적지가 아닙니
 | macOS | `~/Library/Application Support/herdr-hitl` | `$XDG_STATE_HOME/herdr-hitl` (기본 `~/.local/state/herdr-hitl`) |
 | Windows | `%APPDATA%\herdr-hitl` | `%LOCALAPPDATA%\herdr-hitl` |
 
-Herdr 안에서는 `HERDR_PLUGIN_CONFIG_DIR`과 `HERDR_PLUGIN_STATE_DIR`이 우선합니다. `HITL_CONFIG_DIR`과 `HITL_STATE_DIR`은 그보다도 우선합니다. `herdr-hitl config path`로 실제 경로를 확인하십시오.
+이 위치는 Herdr가 실행해도 바뀌지 않습니다. Herdr는 플러그인 액션과 startup 훅에는 `HERDR_PLUGIN_CONFIG_DIR`·`HERDR_PLUGIN_STATE_DIR`을 주입하지만 에이전트가 질문하는 pane에는 주입하지 않습니다. 그것을 따르면 두 호출자가 서로 다른 설정을 읽고, 소켓이 상태 디렉터리에서 파생되므로 **봇 토큰 하나에 Daemon 두 개**가 붙습니다. 그래서 무시합니다. 유일한 재정의는 `HITL_CONFIG_DIR`과 `HITL_STATE_DIR`입니다. `herdr-hitl config path`로 실제 경로를 확인하십시오.
 
 ### `config.toml`
 
@@ -115,8 +115,8 @@ pane_tokens = true        # 대기 상태를 pane 토큰으로 노출합니다
 | `HITL_IDLE_SHUTDOWN` | `daemon.idle_shutdown` | — |
 | `HITL_HERDR_NOTIFICATIONS` | `herdr.notifications` | — |
 | `HITL_HERDR_PANE_TOKENS` | `herdr.pane_tokens` | — |
-| `HITL_CONFIG_DIR` | 설정 디렉터리 | `HERDR_PLUGIN_CONFIG_DIR` |
-| `HITL_STATE_DIR` | 상태 디렉터리 | `HERDR_PLUGIN_STATE_DIR` |
+| `HITL_CONFIG_DIR` | 설정 디렉터리 | — |
+| `HITL_STATE_DIR` | 상태 디렉터리 | — |
 | `HITL_SOCKET` | Daemon 엔드포인트 경로 | — |
 | `HITL_AGENT` | `--agent` 기본 라벨 | — |
 

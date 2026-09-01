@@ -3,7 +3,7 @@
 # User-editable configuration does NOT live here. It lives in the plugin config
 # directory, which you can print with:
 #
-#   herdr plugin config-dir huketo.hitl
+#   herdr-hitl config path
 #
 # Put `config.toml` and `.env` there. See README.md and docs/setup-*.md.
 

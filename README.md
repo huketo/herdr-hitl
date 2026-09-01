@@ -23,7 +23,7 @@ go install github.com/huketo/herdr-hitl/cmd/herdr-hitl@latest
 Then configure one messenger and check it:
 
 ```sh
-$EDITOR "$(herdr plugin config-dir huketo.hitl)/config.toml"
+$EDITOR "$(herdr-hitl config path)"
 herdr-hitl doctor
 herdr-hitl ask -t "Smoke test" -m "Reply with anything." --timeout 2m
 ```
@@ -60,7 +60,7 @@ Where they live:
 | macOS | `~/Library/Application Support/herdr-hitl` | `$XDG_STATE_HOME/herdr-hitl` (default `~/.local/state/herdr-hitl`) |
 | Windows | `%APPDATA%\herdr-hitl` | `%LOCALAPPDATA%\herdr-hitl` |
 
-Under Herdr, `HERDR_PLUGIN_CONFIG_DIR` and `HERDR_PLUGIN_STATE_DIR` win, so the plugin keeps its files where `herdr plugin config-dir huketo.hitl` says. `HITL_CONFIG_DIR` and `HITL_STATE_DIR` override everything. Run `herdr-hitl config path` to see the resolved paths.
+These locations do not change when Herdr launches the binary. Herdr injects `HERDR_PLUGIN_CONFIG_DIR` and `HERDR_PLUGIN_STATE_DIR` for plugin actions and startup hooks, but not for the pane an agent asks from; honouring them would give those two callers different configs and — because the socket derives from the state directory — two daemons on one bot token. `HITL_CONFIG_DIR` and `HITL_STATE_DIR` are the only overrides. Run `herdr-hitl config path` to see the resolved location.
 
 ### `config.toml`
 
@@ -109,8 +109,8 @@ pane_tokens = true        # expose pending state as a pane token for the status 
 | `HITL_IDLE_SHUTDOWN` | `daemon.idle_shutdown` | — |
 | `HITL_HERDR_NOTIFICATIONS` | `herdr.notifications` | — |
 | `HITL_HERDR_PANE_TOKENS` | `herdr.pane_tokens` | — |
-| `HITL_CONFIG_DIR` | config directory | `HERDR_PLUGIN_CONFIG_DIR` |
-| `HITL_STATE_DIR` | state directory | `HERDR_PLUGIN_STATE_DIR` |
+| `HITL_CONFIG_DIR` | config directory | — |
+| `HITL_STATE_DIR` | state directory | — |
 | `HITL_SOCKET` | daemon endpoint path | — |
 | `HITL_AGENT` | default `--agent` label | — |
 
