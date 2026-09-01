@@ -107,13 +107,33 @@ func Socket() (string, error) {
 	return filepath.Join(shortRuntimeDir(), AppName+"-"+fingerprint(state)+".sock"), nil
 }
 
-// LockFile returns the path of the single-daemon lock.
+// LockFile returns the lock a running daemon holds for its whole lifetime.
+//
+// Holding it is what makes "one daemon per machine" true. The socket path
+// cannot carry that guarantee on its own: a daemon unlinks the socket file as
+// it shuts down, and a daemon that started in the meantime would have its
+// file deleted out from under it, leaving two live daemons and two pollers on
+// one bot token.
 func LockFile() (string, error) {
 	state, err := StateDir()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(state, "daemon.lock"), nil
+}
+
+// SpawnLockFile returns the lock that serialises daemon spawning.
+//
+// It is deliberately not LockFile: the spawning CLI holds this one while it
+// waits for the child to come up, and the child holds LockFile for its
+// lifetime. One file for both would deadlock — the parent would still be
+// holding it when the child tried to take it.
+func SpawnLockFile() (string, error) {
+	state, err := StateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(state, "spawn.lock"), nil
 }
 
 // LogFile returns the path the background daemon writes its log to.

@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/huketo/herdr-hitl/internal/config"
@@ -81,6 +82,27 @@ func Run(ctx context.Context, opts Options) error {
 			return err
 		}
 	}
+
+	// The lock, not the socket, is what makes "one daemon" true. A shutting
+	// down daemon unlinks the socket path; without a lifetime lock it can
+	// delete the file of a daemon that started in the meantime, leaving two
+	// live daemons — and two pollers on one Telegram bot token, which is the
+	// exact failure this process exists to prevent.
+	lockPath, err := paths.LockFile()
+	if err != nil {
+		return err
+	}
+	if err := paths.EnsureDir(filepath.Dir(lockPath)); err != nil {
+		return err
+	}
+	releaseLock, locked, err := tryLock(lockPath)
+	if err != nil {
+		return err
+	}
+	if !locked {
+		return fmt.Errorf("%w: another daemon holds %s", ipc.ErrAlreadyRunning, lockPath)
+	}
+	defer releaseLock()
 
 	listener, err := ipc.Listen(endpoint)
 	if err != nil {

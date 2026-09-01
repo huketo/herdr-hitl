@@ -48,7 +48,10 @@ func TestEnsureRunningReportsSpawnFailure(t *testing.T) {
 func TestEnsureRunningWaitsInsteadOfSpawningWhenLocked(t *testing.T) {
 	endpoint := stateEndpoint(t)
 
-	lockPath, err := paths.LockFile()
+	// The spawn lock, not the daemon lock: this one serialises two `ask`
+	// calls racing to start a daemon. The daemon itself holds a different
+	// file for its lifetime, because one file for both would deadlock.
+	lockPath, err := paths.SpawnLockFile()
 	if err != nil {
 		t.Fatalf("lock path: %v", err)
 	}
@@ -106,7 +109,7 @@ func TestWaitForDaemonHonoursContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if err := waitForDaemon(ctx, endpoint, time.Minute); err == nil {
+	if err := waitForDaemon(ctx, endpoint, time.Minute, LogSize()); err == nil {
 		t.Fatal("want the canceled context to be reported")
 	}
 }

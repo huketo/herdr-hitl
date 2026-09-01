@@ -66,6 +66,11 @@ func ensureRunning(ctx context.Context, endpoint, executable string, log *slog.L
 	if locked {
 		defer release()
 	}
+	// Everything the child writes past this point is its own. Blaming a
+	// week-old failure on a daemon that is starting now would be worse than
+	// saying nothing.
+	baseline := LogSize()
+
 	switch {
 	// A broken lock is not a reason to give up: ipc.Listen is the real
 	// arbiter, so a redundant spawn costs one process that exits immediately.
@@ -77,14 +82,14 @@ func ensureRunning(ctx context.Context, endpoint, executable string, log *slog.L
 		log.Debug("another process is starting the daemon; waiting")
 	}
 
-	return waitForDaemon(ctx, endpoint, wait)
+	return waitForDaemon(ctx, endpoint, wait, baseline)
 }
 
 // lockForSpawn takes the single-daemon lock. A lock that cannot be taken for
 // any reason other than contention is reported so the caller can spawn anyway:
 // ipc.Listen is the real arbiter, the lock only saves a wasted process.
 func lockForSpawn(log *slog.Logger) (release func(), locked bool, err error) {
-	lockPath, err := paths.LockFile()
+	lockPath, err := paths.SpawnLockFile()
 	if err != nil {
 		return nil, false, err
 	}
@@ -142,10 +147,14 @@ func spawn(executable string, log *slog.Logger) error {
 	return nil
 }
 
-// waitForDaemon polls the endpoint until a daemon answers or the budget runs
-// out. The failure message points at the log, which is the only place the
-// child's own error ended up.
-func waitForDaemon(ctx context.Context, endpoint string, wait time.Duration) error {
+// waitForDaemon polls the endpoint until a daemon answers, the child reports
+// a fatal error, or the budget runs out.
+//
+// Watching the log as well as the socket is what turns "daemon did not start
+// within 15s" into the actual reason, and returns it in a moment rather than
+// after the full budget. A misconfigured transport is the common first-run
+// failure and it is diagnosed in the child, not here.
+func waitForDaemon(ctx context.Context, endpoint string, wait time.Duration, baseline int64) error {
 	deadline := time.Now().Add(wait)
 	delay := probeInitialDelay
 
@@ -155,6 +164,9 @@ func waitForDaemon(ctx context.Context, endpoint string, wait time.Duration) err
 		}
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+		if reason := LastFailureSince(baseline); reason != "" {
+			return fmt.Errorf("the daemon exited during startup: %s", reason)
 		}
 		if time.Now().After(deadline) {
 			break

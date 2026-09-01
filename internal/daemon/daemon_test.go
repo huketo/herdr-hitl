@@ -164,7 +164,7 @@ func runningDaemon(t *testing.T, cfg *config.Config, endpoint string, factory Tr
 		})
 	}()
 
-	if err := waitForDaemon(ctx, endpoint, 5*time.Second); err != nil {
+	if err := waitForDaemon(ctx, endpoint, 5*time.Second, LogSize()); err != nil {
 		cancel()
 		t.Fatalf("daemon never came up: %v (run: %v)", err, <-done)
 	}
@@ -495,7 +495,7 @@ func TestShutdownOpStopsTheDaemon(t *testing.T) {
 			},
 		})
 	}()
-	if err := waitForDaemon(ctx, endpoint, 5*time.Second); err != nil {
+	if err := waitForDaemon(ctx, endpoint, 5*time.Second, LogSize()); err != nil {
 		t.Fatalf("daemon never came up: %v", err)
 	}
 
@@ -568,7 +568,7 @@ func TestIdleShutdownWaitsForAPendingQuestion(t *testing.T) {
 	go func() {
 		done <- Run(ctx, Options{Config: cfg, Endpoint: endpoint, Log: discardLogger(), NewTransports: factory})
 	}()
-	if err := waitForDaemon(ctx, endpoint, 5*time.Second); err != nil {
+	if err := waitForDaemon(ctx, endpoint, 5*time.Second, LogSize()); err != nil {
 		t.Fatalf("daemon never came up: %v", err)
 	}
 
@@ -595,5 +595,49 @@ func TestIdleShutdownWaitsForAPendingQuestion(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("daemon stayed resident after the question resolved")
+	}
+}
+
+func TestSecondDaemonIsRefusedEvenWhenTheSocketFileIsGone(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a named pipe leaves no file to unlink")
+	}
+
+	// Regression, observed live. A daemon unlinks the socket path as it shuts
+	// down. If a newer daemon has already bound a fresh file at that path,
+	// the old one's cleanup deletes it: the new daemon stays alive but
+	// unreachable, the next start binds a third file, and two live daemons
+	// poll one Telegram bot token until Telegram 409s them both.
+	//
+	// The socket path therefore cannot carry mutual exclusion. The lifetime
+	// lock can, so a second Run must be refused even when the path is free.
+	endpoint := stateEndpoint(t)
+	cfg := config.Default()
+	factory := factoryOf(newFakeTransport("fake", nil))
+
+	stop := runningDaemon(t, cfg, endpoint, factory)
+	defer stop()
+
+	// The losing half of the race: the path is free again while the first
+	// daemon is very much alive.
+	if err := os.Remove(endpoint); err != nil {
+		t.Fatalf("unlink socket: %v", err)
+	}
+
+	// The second Run gets a deadline of its own. If the lock ever stops
+	// guarding this, Run does not fail — it binds the free path and serves
+	// forever, so an unbounded context would hang the suite until the go test
+	// timeout instead of reporting the regression.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := Run(ctx, Options{
+		Config:        cfg,
+		Endpoint:      endpoint,
+		Log:           discardLogger(),
+		NewTransports: factory,
+	})
+	if !errors.Is(err, ipc.ErrAlreadyRunning) {
+		t.Fatalf("second Run = %v, want ipc.ErrAlreadyRunning; a second daemon means two pollers on one bot token", err)
 	}
 }
