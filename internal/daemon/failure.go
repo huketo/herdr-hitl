@@ -76,3 +76,57 @@ func isFailureLine(line string) bool {
 		return false
 	}
 }
+
+// LogSize returns the current length of the daemon log, for use as a baseline
+// before spawning. Content past that offset belongs to the new process.
+func LogSize() int64 {
+	path, err := paths.LogFile()
+	if err != nil {
+		return 0
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
+}
+
+// LastFailureSince returns the most recent fatal line written after offset,
+// or "" when the daemon has not failed since then.
+//
+// The offset matters: a daemon that died last week must not be blamed for a
+// daemon that is starting now.
+func LastFailureSince(offset int64) string {
+	path, err := paths.LogFile()
+	if err != nil {
+		return ""
+	}
+	return lastFailureFrom(path, offset)
+}
+
+func lastFailureFrom(path string, offset int64) string {
+	f, err := os.Open(path) //nolint:gosec // path is the daemon's own log
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+
+	info, err := f.Stat()
+	if err != nil || info.Size() <= offset {
+		return ""
+	}
+	if _, err := f.Seek(offset, io.SeekStart); err != nil {
+		return ""
+	}
+	tail, err := io.ReadAll(f)
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(string(tail), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if line := strings.TrimSpace(lines[i]); isFailureLine(line) {
+			return line
+		}
+	}
+	return ""
+}

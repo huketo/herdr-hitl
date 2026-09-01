@@ -84,3 +84,37 @@ func TestLastFailureReadsOnlyTheTail(t *testing.T) {
 		t.Errorf("lastFailureIn() = %q", got)
 	}
 }
+
+func TestLastFailureFromIgnoresOlderFailures(t *testing.T) {
+	t.Parallel()
+
+	// The log outlives every daemon. A failure from last week must not be
+	// blamed on the daemon that is starting now, so the baseline offset is
+	// what separates "this attempt" from "the file's history".
+	path := filepath.Join(t.TempDir(), "daemon.log")
+	old := "herdr-hitl: serve: an ancient failure\n"
+	if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+	baseline := int64(len(old))
+
+	if got := lastFailureFrom(path, baseline); got != "" {
+		t.Errorf("lastFailureFrom(baseline) = %q, want nothing from before the baseline", got)
+	}
+
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	if _, err := f.WriteString(`time=x level=ERROR msg="transport failed to start"` + "\n"); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	_ = f.Close()
+
+	if got := lastFailureFrom(path, baseline); !strings.Contains(got, "transport failed to start") {
+		t.Errorf("lastFailureFrom(baseline) = %q, want the new failure", got)
+	}
+	if got := lastFailureFrom(path, 0); !strings.Contains(got, "transport failed to start") {
+		t.Errorf("lastFailureFrom(0) = %q, want the most recent failure", got)
+	}
+}
