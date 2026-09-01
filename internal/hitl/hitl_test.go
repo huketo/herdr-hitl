@@ -1,6 +1,8 @@
 package hitl_test
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -176,14 +178,19 @@ func TestNewAttachmentRejectsBadInput(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		path    string
+		name string
+		path string
+		// wantErr matches the message; wantIs matches a sentinel. The
+		// "file is missing" text differs per OS — Linux says "no such file",
+		// Windows says "The system cannot find the file specified" — so that
+		// case asserts the sentinel instead.
 		wantErr string
+		wantIs  error
 	}{
-		{"missing", filepath.Join(dir, "nope.md"), "no such file"},
-		{"directory", dir, "is a directory"},
-		{"empty", empty, "file is empty"},
-		{"oversized", oversized, "exceeds the"},
+		{name: "missing", path: filepath.Join(dir, "nope.md"), wantIs: fs.ErrNotExist},
+		{name: "directory", path: dir, wantErr: "is a directory"},
+		{name: "empty", path: empty, wantErr: "file is empty"},
+		{name: "oversized", path: oversized, wantErr: "exceeds the"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -192,7 +199,10 @@ func TestNewAttachmentRejectsBadInput(t *testing.T) {
 			if err == nil {
 				t.Fatalf("NewAttachment(%q) = nil, want error", tc.path)
 			}
-			if !strings.Contains(err.Error(), tc.wantErr) {
+			if tc.wantIs != nil && !errors.Is(err, tc.wantIs) {
+				t.Fatalf("err = %v, want it to wrap %v", err, tc.wantIs)
+			}
+			if tc.wantErr != "" && !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("err = %v, want it to contain %q", err, tc.wantErr)
 			}
 		})

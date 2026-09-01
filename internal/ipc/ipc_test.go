@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -114,14 +115,29 @@ func startServer(t *testing.T, h ipc.Handler) string {
 	return endpoint
 }
 
+// testEndpoint returns an endpoint short enough to bind.
+//
+// An earlier version used t.TempDir() and asserted in a comment that it was
+// short enough everywhere. It is not: macOS puts temp directories under
+// /var/folders/<random>/T/<test name>, which overflows the ~104 byte
+// sockaddr_un limit and fails with "bind: invalid argument". These tests run
+// in parallel, so t.Setenv is unavailable and the path is built against a
+// short base directly.
 func testEndpoint(t *testing.T) string {
 	t.Helper()
+
 	if runtime.GOOS == "windows" {
-		return fmt.Sprintf(`\\.\pipe\herdr-hitl-test-%d-%s`, time.Now().UnixNano(), t.Name())
+		return fmt.Sprintf(`\\.\pipe\herdr-hitl-test-%d`, time.Now().UnixNano())
 	}
-	// t.TempDir() is short enough on every supported platform to stay inside
-	// the sockaddr_un path limit.
-	return filepath.Join(t.TempDir(), "d.sock")
+	// t.TempDir() is what this must not use: on macOS it returns a
+	// /var/folders/... path that overflows the sockaddr_un limit, which is
+	// the exact failure this helper exists to avoid.
+	dir, err := os.MkdirTemp("/tmp", "hitl") //nolint:usetesting // see above
+	if err != nil {
+		t.Fatalf("temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return filepath.Join(dir, "d.sock")
 }
 
 func TestAskRoundTrip(t *testing.T) {
@@ -327,7 +343,7 @@ func TestListenReclaimsAStaleSocket(t *testing.T) {
 	}
 	t.Parallel()
 
-	endpoint := filepath.Join(t.TempDir(), "d.sock")
+	endpoint := testEndpoint(t)
 	// Simulate a crashed daemon: the socket file exists, nothing answers.
 	l, err := net.Listen("unix", endpoint)
 	if err != nil {

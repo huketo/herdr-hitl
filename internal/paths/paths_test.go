@@ -1,6 +1,7 @@
 package paths_test
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -65,7 +66,11 @@ func TestStateDirPrecedence(t *testing.T) {
 }
 
 func TestSocketDerivesFromTheStateDir(t *testing.T) {
-	state := t.TempDir()
+	// Deliberately a short base: t.TempDir() on macOS lives under
+	// /var/folders/<random>/T/<test name>, which is long enough that Socket
+	// correctly shortens it — the behaviour TestSocketShortensAnOverlongUnixPath
+	// covers. This case is the other half of the contract.
+	state := shortStateDir(t)
 	t.Setenv(paths.EnvSocket, "")
 	t.Setenv(paths.EnvStateDir, state)
 
@@ -164,4 +169,23 @@ func TestEnsureDirIsOwnerOnly(t *testing.T) {
 		t.Fatalf("EnsureDir twice: %v", err)
 	}
 	assertOwnerOnly(t, dir)
+}
+
+// shortStateDir returns a temp directory whose path is short enough to hold a
+// Unix socket, which t.TempDir() does not guarantee on macOS.
+func shortStateDir(t *testing.T) string {
+	t.Helper()
+
+	if runtime.GOOS == "windows" {
+		return t.TempDir()
+	}
+	// t.TempDir() is what this must not use: on macOS it returns a
+	// /var/folders/... path that overflows the sockaddr_un limit, which is
+	// the exact failure this helper exists to avoid.
+	dir, err := os.MkdirTemp("/tmp", "hitl") //nolint:usetesting // see above
+	if err != nil {
+		t.Fatalf("temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
 }

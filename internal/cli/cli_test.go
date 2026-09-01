@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -497,8 +498,13 @@ func TestConfigInitDoesNotOverwrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat: %v", err)
 	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Fatalf("mode = %v, want 0600", perm)
+	// Windows reports 0666 for any writable file: NTFS ACLs do not map onto
+	// Unix mode bits, and Go's os package does not model them. The mode still
+	// matters on Unix, where the file sits next to a bot token.
+	if runtime.GOOS != "windows" {
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Fatalf("mode = %v, want 0600", perm)
+		}
 	}
 	if code, _, stderr := h.run(t, "config", "init"); code != ExitError {
 		t.Fatalf("second init exit code = %d, want %d (%s)", code, ExitError, stderr)
