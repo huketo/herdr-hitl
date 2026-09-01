@@ -1,6 +1,6 @@
 ---
 name: herdr-hitl
-description: Ask the human a question and block until they answer, delivered to their phone over Telegram or Discord. Use when you need a decision, approval, credential, missing requirement, or judgement call you cannot make alone — and especially when the human is away from the terminal and would otherwise never see the prompt. Triggers on needing permission for a destructive or irreversible action, choosing between designs with real tradeoffs, a secret or value only the human has, an ambiguous or contradictory requirement, or announcing the end of a long unattended run.
+description: Ask the human a question and block until they answer, delivered to their phone over Telegram or Discord. Use when you need a decision, approval, credential, missing requirement, or judgement call you cannot make alone — and especially when the human is away from the terminal and would otherwise never see the prompt. Triggers on needing permission for a destructive or irreversible action, choosing between designs with real tradeoffs, a secret or value only the human has, an ambiguous or contradictory requirement, or deciding whether to proceed with a proposed next task or end at a terminal boundary.
 ---
 
 # Asking a human
@@ -16,6 +16,7 @@ Ask when the decision is genuinely not yours:
 - **Something only the human has.** A credential, an API key, an account id, a production hostname.
 - **An ambiguous or contradictory requirement.** The issue says one thing, the code says another, and picking wrong wastes the whole run.
 - **Scope you were not given.** The fix requires touching a system outside the assignment.
+- **A terminal boundary.** The current work completed, became blocked, or stopped; the human chooses whether to proceed with one proposed next task or end the run.
 
 ## When NOT to ask
 
@@ -24,9 +25,9 @@ Every unnecessary question costs the human an interruption and costs you minutes
 - **The repo, tools, or context can answer it.** Read the code, run the test, check the config, grep the history first. "Which test runner?" is in `package.json`.
 - **One composite question would do.** Never fire three questions in a row. Bundle them: state the decision once, list the options, ask once.
 - **The human already answered it.** Anything in the conversation, the issue, an ADR, or `CONTEXT.md` is answered. Do not re-ask for confirmation of an instruction you were already given.
-- **You are asking for reassurance.** "Shall I continue?" is not a decision. Continue.
+- **You are asking for reassurance during active work.** "Shall I continue?" is not a decision. Continue until a terminal boundary or a real human-only choice.
 - **It is a style or naming detail.** Follow the surrounding code and move on.
-- **It is cheap and reversible.** Just do it; report it afterwards.
+- **It is cheap and reversible during active work.** Just do it and report it afterwards.
 
 If you cannot state a concrete consequence for each option, you do not have a question yet. Investigate more.
 
@@ -66,6 +67,22 @@ herdr-hitl doctor [-o text|json]
 ```
 
 `ask -o text` prints **only** the answer on stdout; logs go to stderr. So `ANSWER=$(herdr-hitl ask …)` is the idiomatic call. With `-c`, the answer text is the chosen label; use `-o json` and read `.choice_id` when you need to branch on a stable id.
+
+## Terminal decision
+
+When the current user-requested run reaches a terminal boundary:
+
+1. State the outcome, exact verification, and remaining blockers or risks.
+2. Propose one concrete, evidence-backed next task with its scope and consequence. If none is
+   justified, say so and recommend ending instead of inventing work.
+3. Ask the human to proceed with that task or end, give a recommendation with grounds, and allow a
+   free-text answer.
+4. On an explicit proceed answer, add only the named task to the work list and continue without a
+   terminal response. On an explicit end answer, send the terminal response without asking again.
+
+An ambiguous answer needs a follow-up. A timeout, cancellation, or delivery failure leaves the run
+blocked and authorizes neither next work nor termination. Do not use `--default`: only a human
+Answer may select proceed or end. `notify` cannot replace this decision because it returns no Answer.
 
 ## Examples
 
@@ -129,11 +146,12 @@ herdr-hitl ask -o json --timeout 2h \
   --primary go --danger drop --free
 ```
 
-**Fire-and-forget at the end of a long run.** Never blocks, no exit-code branching.
+**Informational milestone with no decision or authority.** Never use `notify` for a terminal
+proceed-or-end gate.
 
 ```sh
-herdr-hitl notify -t "Migration finished" \
-  -m "42 tables migrated, 0 errors, 6m12s. Report attached." -a /tmp/report.md
+herdr-hitl notify -t "Backup checkpoint completed" \
+  -m "42 tables copied, 0 errors. The migration continues with index creation."
 ```
 
 ## Exit codes
