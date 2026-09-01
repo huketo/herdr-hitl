@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/huketo/herdr-hitl/compare/v0.1.1...v0.1.2) (2026-09-01)
+
+
+### Bug fixes
+
+* **cli:** report a real version when the linker did not stamp one ([#13](https://github.com/huketo/herdr-hitl/issues/13)) ([af2b90b](https://github.com/huketo/herdr-hitl/commit/af2b90b373c4f2ac06cb004a3e2a329d94373555))
+
 ## [0.1.1](https://github.com/huketo/herdr-hitl/compare/v0.1.0...v0.1.1) (2026-09-01)
 
 

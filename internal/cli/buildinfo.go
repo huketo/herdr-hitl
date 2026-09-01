@@ -14,7 +14,7 @@ import (
 // runs `[[build]]` commands as argv with no shell, so the manifest cannot
 // compute `-X main.version=$(git describe)`, and a plugin installed at a tag
 // would otherwise report itself as "dev".
-const fallbackVersion = "0.1.1" // x-release-please-version
+const fallbackVersion = "0.1.2" // x-release-please-version
 
 // devVersion is what main.go carries when no linker stamp was applied.
 const devVersion = "dev"
