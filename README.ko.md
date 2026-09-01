@@ -293,7 +293,7 @@ sequenceDiagram
 
     A->>C: 실행, stdout에서 대기
     C->>D: 연결 (unix 소켓 / named pipe), ipc.OpAsk
-    Note over C,D: ask 내내 연결을 열어 둡니다;<br/>클라이언트 EOF가 질문을 철회합니다
+    Note over C,D: ask 내내 연결을 열어 둡니다 —<br/>클라이언트 EOF가 질문을 철회합니다
     D->>M: Poster.Post — 메시지 + 버튼 + 첨부
     M->>H: 폰 알림
     H->>M: 버튼을 누르거나 글을 씁니다
