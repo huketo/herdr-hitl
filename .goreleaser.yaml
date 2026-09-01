@@ -1,0 +1,94 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: herdr-hitl
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod download
+
+builds:
+  - id: herdr-hitl
+    main: ./cmd/herdr-hitl
+    binary: herdr-hitl
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    # These three names must stay in sync with the package-level vars in
+    # cmd/herdr-hitl/main.go and with the Makefile's LDFLAGS.
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    # Reproducible archives: stamp binaries with the commit time, not build time.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: herdr-hitl
+    ids:
+      - herdr-hitl
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - README.md
+      - LICENSE
+      - herdr-plugin.toml
+      - .env.example
+      - skills/**/*
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Performance
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Refactors
+      regexp: '^.*?refactor(\([[:word:]]+\))??!?:.+$'
+      order: 3
+    - title: Others
+      order: 999
+  filters:
+    exclude:
+      - '^docs(\([[:word:]]+\))??!?:'
+      - '^test(\([[:word:]]+\))??!?:'
+      - '^chore(\([[:word:]]+\))??!?:'
+      - '^ci(\([[:word:]]+\))??!?:'
+      - '^style(\([[:word:]]+\))??!?:'
+      - "^Merge branch"
+      - "^Merge pull request"
+      - "^Merge remote-tracking branch"
+
+release:
+  # release-please already created the release and its notes; goreleaser only
+  # attaches the built artifacts.
+  mode: append
+  draft: false
+  prerelease: auto
+
+report_sizes: true

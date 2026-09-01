@@ -1,0 +1,108 @@
+name: Bug report
+description: Something in herdr-hitl behaves incorrectly.
+title: "fix: "
+labels:
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please redact bot tokens and chat IDs from any
+        logs or config you paste — `herdr-hitl doctor` never prints tokens, but
+        raw config files do.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The behaviour you observed.
+      placeholder: |
+        `herdr-hitl ask -t "Deploy?" -c yes -c no` exited 3 immediately instead
+        of waiting for the Telegram reply.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The exact commands, in order.
+      render: shell
+      placeholder: |
+        herdr-hitl daemon restart
+        herdr-hitl ask -t "Deploy?" -m "Ship 1.2.0 to prod?" -c ship=Ship -c hold=Hold
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of herdr-hitl is involved?
+      options:
+        - cli (ask / notify / pending / answer / cancel)
+        - daemon (serve, socket, lifecycle)
+        - broker (timeouts, cancellation, routing)
+        - telegram transport
+        - discord transport
+        - config / doctor
+        - herdr plugin integration (notifications, pane tokens)
+        - skill / docs
+        - not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: herdr-hitl version
+      description: Output of `herdr-hitl version`.
+      placeholder: 0.1.0 (abc1234, 2026-01-01T00:00:00Z)
+    validations:
+      required: true
+
+  - type: input
+    id: herdr-version
+    attributes:
+      label: Herdr version
+      description: Output of `herdr --version`. Leave blank if not running under Herdr.
+      placeholder: 0.8.0
+
+  - type: input
+    id: os
+    attributes:
+      label: OS and architecture
+      placeholder: macOS 15.3 arm64 / Ubuntu 24.04 amd64 / Windows 11 amd64
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`herdr-hitl doctor` output"
+      description: Safe to paste — it redacts tokens.
+      render: text
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Daemon logs
+      description: Relevant lines from the daemon log. Redact tokens and chat IDs.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: I removed bot tokens and other secrets from everything I pasted.
+          required: true

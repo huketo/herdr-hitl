@@ -1,0 +1,76 @@
+name: Feature request
+description: Propose a change to herdr-hitl.
+title: "feat: "
+labels:
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        herdr-hitl has a deliberately small surface: a blocking `ask` CLI, a
+        resident daemon, and one poster per messenger. Proposals that keep that
+        shape land much faster than ones that add a new interaction model.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you unable to do today? Describe the situation, not the solution.
+      placeholder: |
+        When an agent asks a question I want to answer from my phone with a file
+        attached, but only the agent side can attach files.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What should herdr-hitl do? Include the concrete CLI or config surface if there is one.
+      placeholder: |
+        Accept an image reply on Telegram and expose its local path in the
+        `hitl.Answer` JSON as `attachments`.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - cli (flags, output, exit codes)
+        - daemon / ipc
+        - broker semantics (timeout, cancel, routing)
+        - telegram transport
+        - discord transport
+        - a new transport
+        - config / doctor
+        - herdr plugin integration
+        - skill / docs
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Including "do nothing" and any workaround you use today.
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Is this a breaking change?
+      options:
+        - "No"
+        - "Yes — it changes existing flags, output, or exit codes"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and discussions for this idea.
+          required: true
