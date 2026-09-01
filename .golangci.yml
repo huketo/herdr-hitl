@@ -1,0 +1,54 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - copyloopvar
+    - errcheck
+    - errorlint
+    - gocritic
+    - govet
+    - ineffassign
+    - misspell
+    - nilerr
+    - noctx
+    - revive
+    - staticcheck
+    - unconvert
+    - unused
+    - usetesting
+  settings:
+    errcheck:
+      check-type-assertions: true
+      # Writes to an already-broken stdout/stderr cannot be handled: the only
+      # channel for reporting the failure is the stream that just failed.
+      # Every other unchecked error stays an error.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    revive:
+      rules:
+        - name: exported
+          disabled: false
+        - name: package-comments
+          disabled: true
+  exclusions:
+    rules:
+      - path: _test\.go$
+        linters:
+          - bodyclose
+          - noctx
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/huketo/herdr-hitl

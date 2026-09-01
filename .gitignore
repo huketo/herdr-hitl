@@ -1,0 +1,12 @@
+# build output
+/bin/
+/dist/
+*.test
+coverage.out
+coverage.txt
+
+# local dev
+.env
+.env.*
+!.env.example
+.direnv/
