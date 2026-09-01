@@ -99,7 +99,7 @@ jobs:
       # Build every release target on every PR so a tag push can never be the
       # first time a GOOS/GOARCH combination is compiled.
       - name: GoReleaser build (snapshot)
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
           args: build --snapshot --clean
