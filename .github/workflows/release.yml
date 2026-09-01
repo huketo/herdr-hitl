@@ -43,7 +43,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # Full history plus the freshly created tag: goreleaser derives the
           # version and the changelog range from git.
