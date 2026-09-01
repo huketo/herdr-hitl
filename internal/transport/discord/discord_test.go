@@ -1,6 +1,8 @@
 package discord
 
 import (
+	"errors"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -295,5 +297,64 @@ func TestInteractionUser(t *testing.T) {
 				t.Fatalf("interactionUser = %+v, want id %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestExplainSendErrorNamesTheFix(t *testing.T) {
+	t.Parallel()
+
+	// A bot may only DM a user it shares a guild with, and opening the DM
+	// channel succeeds regardless — the failure only shows up on the first
+	// question, as a bare 403. The error carries the invite URL because the
+	// fix is always the same and the bot knows its own application id.
+	tr, err := New(config.Discord{BotToken: testToken, UserID: "248009230597095424"}, newFakeResolver(), nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	tr.self = &discordgo.User{ID: "1544189650929713283", Username: "Herdr"}
+
+	// RESTError.Error dereferences Response, so a usable fixture needs one.
+	restErr := &discordgo.RESTError{
+		Response:     &http.Response{Status: "403 Forbidden", StatusCode: http.StatusForbidden},
+		ResponseBody: []byte(`{"message":"Cannot send messages to this user due to having no mutual guilds","code":50278}`),
+		Message: &discordgo.APIErrorMessage{
+			Code:    50278,
+			Message: "Cannot send messages to this user due to having no mutual guilds",
+		},
+	}
+
+	got := tr.explainSendError(restErr).Error()
+	for _, want := range []string{
+		"no mutual guilds",
+		"shares a server with",
+		"https://discord.com/oauth2/authorize?client_id=1544189650929713283",
+		"permissions=125952",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("error %q does not mention %q", got, want)
+		}
+	}
+}
+
+func TestExplainSendErrorLeavesOtherFailuresAlone(t *testing.T) {
+	t.Parallel()
+
+	tr, err := New(config.Discord{BotToken: testToken, ChannelID: "1"}, newFakeResolver(), nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	tr.self = &discordgo.User{ID: "42"}
+
+	for _, err := range []error{
+		errors.New("connection refused"),
+		&discordgo.RESTError{
+			Response:     &http.Response{Status: "403 Forbidden", StatusCode: http.StatusForbidden},
+			ResponseBody: []byte(`{"message":"Missing Permissions","code":50013}`),
+			Message:      &discordgo.APIErrorMessage{Code: 50013, Message: "Missing Permissions"},
+		},
+	} {
+		if got := tr.explainSendError(err); got != err { //nolint:errorlint // identity is the point
+			t.Errorf("explainSendError(%v) rewrote an unrelated failure: %v", err, got)
+		}
 	}
 }

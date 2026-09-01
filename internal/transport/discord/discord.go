@@ -214,6 +214,44 @@ func (t *Transport) closeQuietly() {
 	}
 }
 
+// Discord error codes that mean "this bot may not message this person".
+const (
+	errCodeCannotSendToUser  = 50007
+	errCodeNoMutualGuilds    = 50278
+	invitePermissionBitfield = 125952
+)
+
+// explainSendError turns Discord's two "cannot DM" codes into the action that
+// fixes them.
+//
+// A bot may only DM a user it shares a guild with, and UserChannelCreate
+// succeeds anyway — the DM channel exists, it just cannot be written to. So
+// the failure lands on the first question, long after setup, as a bare 403.
+// The fix always looks the same and the bot knows its own application id, so
+// the error carries the invite URL rather than describing it.
+func (t *Transport) explainSendError(err error) error {
+	var rest *discordgo.RESTError
+	if !errors.As(err, &rest) || rest.Message == nil {
+		return err
+	}
+	switch rest.Message.Code {
+	case errCodeNoMutualGuilds, errCodeCannotSendToUser:
+	default:
+		return err
+	}
+
+	t.mu.Lock()
+	self := t.self
+	t.mu.Unlock()
+	if self == nil {
+		return fmt.Errorf("%w; a bot can only DM a user it shares a server with", err)
+	}
+	return fmt.Errorf(
+		"%w; a bot can only DM a user it shares a server with. Invite it to one you are in: "+
+			"https://discord.com/oauth2/authorize?client_id=%s&scope=bot%%20applications.commands&permissions=%d",
+		err, self.ID, invitePermissionBitfield)
+}
+
 // Describe returns a one-line summary for `herdr-hitl doctor`. It never
 // includes the bot token.
 func (t *Transport) Describe() string {
@@ -307,7 +345,7 @@ func (t *Transport) Post(ctx context.Context, req *hitl.Request) error {
 
 	msg, err := t.session.ChannelMessageSendComplex(channelID, send, discordgo.WithContext(ctx))
 	if err != nil {
-		return fmt.Errorf("discord: send message to channel %s: %w", channelID, err)
+		return fmt.Errorf("discord: send message to channel %s: %w", channelID, t.explainSendError(err))
 	}
 
 	if awaits {
