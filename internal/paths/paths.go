@@ -1,9 +1,19 @@
 // Package paths resolves the config, state, and socket locations used by both
 // the CLI and the daemon.
 //
-// Herdr owns the directories when herdr-hitl runs as a plugin
-// (HERDR_PLUGIN_CONFIG_DIR / HERDR_PLUGIN_STATE_DIR). Outside Herdr the
-// binary is still a normal CLI, so it falls back to the XDG layout.
+// Every process resolves the same directories, whatever launched it. That is
+// a requirement, not a preference: the daemon is a singleton per user because
+// Telegram's update queue is single-consumer per bot token, and the socket
+// that enforces the singleton is derived from the state directory. A path
+// that varies with the caller yields two sockets and two daemons.
+//
+// Herdr injects HERDR_PLUGIN_CONFIG_DIR and HERDR_PLUGIN_STATE_DIR, but only
+// for plugin actions, startup hooks, and event hooks — never for the pane
+// process an agent runs `herdr-hitl ask` in. Honouring them would split every
+// installation in two: a daemon and config for questions asked by agents, and
+// a second set for anything invoked through Herdr. They are therefore
+// deliberately ignored here; HerdrConfigDir exposes the value so that doctor
+// can warn about a config file stranded there.
 package paths
 
 import (
@@ -27,18 +37,17 @@ const (
 	// EnvSocket overrides the daemon endpoint outright.
 	EnvSocket = "HITL_SOCKET"
 
-	// EnvHerdrConfigDir is injected by Herdr for plugin processes.
+	// EnvHerdrConfigDir is injected by Herdr for plugin processes. It does
+	// not select the config directory; see the package comment.
 	EnvHerdrConfigDir = "HERDR_PLUGIN_CONFIG_DIR"
-	// EnvHerdrStateDir is injected by Herdr for plugin processes.
+	// EnvHerdrStateDir is injected by Herdr for plugin processes. It does not
+	// select the state directory; see the package comment.
 	EnvHerdrStateDir = "HERDR_PLUGIN_STATE_DIR"
 )
 
 // ConfigDir returns the directory holding config.toml and .env.
 func ConfigDir() (string, error) {
 	if dir := os.Getenv(EnvConfigDir); dir != "" {
-		return filepath.Clean(dir), nil
-	}
-	if dir := os.Getenv(EnvHerdrConfigDir); dir != "" {
 		return filepath.Clean(dir), nil
 	}
 	base, err := os.UserConfigDir()
@@ -52,9 +61,6 @@ func ConfigDir() (string, error) {
 // and answer log.
 func StateDir() (string, error) {
 	if dir := os.Getenv(EnvStateDir); dir != "" {
-		return filepath.Clean(dir), nil
-	}
-	if dir := os.Getenv(EnvHerdrStateDir); dir != "" {
 		return filepath.Clean(dir), nil
 	}
 	if runtime.GOOS == "windows" {
@@ -174,4 +180,15 @@ func shortRuntimeDir() string {
 func fingerprint(s string) string {
 	sum := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sum[:5])
+}
+
+// HerdrConfigDir returns the config directory Herdr injected for this process,
+// if any. It is not where configuration is read from — it is reported by
+// doctor so that a file left there by an older setup is not silently ignored.
+func HerdrConfigDir() (string, bool) {
+	dir := os.Getenv(EnvHerdrConfigDir)
+	if dir == "" {
+		return "", false
+	}
+	return filepath.Clean(dir), true
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"text/tabwriter"
@@ -101,6 +102,7 @@ func runChecks(ctx context.Context, g *globals) *report {
 		} else {
 			add("config file", stateWarn, "%s (absent; using defaults and environment)", configFile)
 		}
+		checkStrandedHerdrConfig(add, configFile)
 	}
 
 	if stateDir, err := paths.StateDir(); err != nil {
@@ -267,5 +269,29 @@ func stateMark(s checkState) string {
 		return "WARN"
 	default:
 		return "FAIL"
+	}
+}
+
+// checkStrandedHerdrConfig reports a config file sitting in the directory
+// Herdr injects for plugin processes.
+//
+// Earlier versions read that directory when it was set, which split an
+// installation in two: plugin actions and the startup hook used it, while the
+// pane an agent asks from used the XDG location. Configuration is now resolved
+// identically everywhere, so a file left there is inert — and inert config
+// holding a bot token is exactly the kind of thing that should not fail
+// silently.
+func checkStrandedHerdrConfig(add func(string, checkState, string, ...any), active string) {
+	dir, ok := paths.HerdrConfigDir()
+	if !ok || dir == filepath.Dir(active) {
+		return
+	}
+	for _, name := range []string{"config.toml", ".env"} {
+		path := filepath.Join(dir, name)
+		if _, err := os.Stat(path); err != nil {
+			continue
+		}
+		add("stranded config", stateWarn,
+			"%s is not read; configuration lives at %s. Move it there or delete it.", path, active)
 	}
 }
