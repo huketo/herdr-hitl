@@ -1,5 +1,11 @@
 # herdr-hitl
 
+<p align="center">
+  <img src="assets/herdr-hitl-bot-profile.png" alt="herdr-hitl bot profile" width="220">
+  <br>
+  <em>When an agent needs a human, herdr-hitl brings the question to you.</em>
+</p>
+
 *English · [한국어](README.ko.md)*
 
 A [Herdr](https://herdr.dev) plugin that lets a coding agent block on a human decision delivered over Telegram or Discord. An agent halfway through a long run hits something it must not decide alone — force-push over a colleague's branch, pick between two migration strategies, supply a credential it cannot read, resolve a requirement the issue never stated. Today it either guesses, or it stops and waits for someone to notice a terminal that nobody is watching. `herdr-hitl` gives it a third option: one blocking command, `herdr-hitl ask`, that pushes the question to your phone with buttons or a text box, waits for you to answer, and prints the answer on stdout. Exit code says whether you answered, let it time out, or declined.
