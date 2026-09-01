@@ -175,7 +175,8 @@ func NewRootCommand(info BuildInfo) *cobra.Command {
 // newRootCommand also hands back the flag state, which Main needs after
 // Execute to tell a rejected invocation apart from a failed command.
 func newRootCommand(info BuildInfo) (*cobra.Command, *globals) {
-	g := &globals{info: info}
+	// Resolved in one place so version, doctor, and daemon status all agree.
+	g := &globals{info: info.Resolve()}
 
 	root := &cobra.Command{
 		Use:   "herdr-hitl",
