@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/huketo/herdr-hitl/compare/v0.1.2...v0.1.3) (2026-09-01)
+
+
+### Bug fixes
+
+* **cli:** prefer the release version over a synthesised pseudo-version ([#15](https://github.com/huketo/herdr-hitl/issues/15)) ([d483389](https://github.com/huketo/herdr-hitl/commit/d483389085ca68d438c226f75a471346bf488716))
+
 ## [0.1.2](https://github.com/huketo/herdr-hitl/compare/v0.1.1...v0.1.2) (2026-09-01)
 
 
