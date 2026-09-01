@@ -129,9 +129,9 @@ type question struct {
 // composeQuestion renders req for Telegram's HTML parse mode. failed names the
 // attachments that could not be uploaded, so the human is told what is missing
 // rather than silently seeing an incomplete question.
-func composeQuestion(req *hitl.Request, failed []string) question {
+func composeQuestion(req *hitl.Request, failed []string, textReplies bool) question {
 	header := questionHeader(req)
-	footer := questionFooter(req, failed)
+	footer := questionFooter(req, failed, textReplies)
 
 	build := func(body, note string) string {
 		parts := make([]string, 0, 4)
@@ -195,12 +195,15 @@ func questionHeader(req *hitl.Request) string {
 }
 
 // questionFooter tells the human how to answer and what failed to upload.
-func questionFooter(req *hitl.Request, failed []string) string {
+//
+// textReplies is false for a channel, where nobody can reply. Promising a
+// reply box that the chat does not have would be worse than saying nothing.
+func questionFooter(req *hitl.Request, failed []string, textReplies bool) string {
 	var lines []string
 	switch {
-	case req.AllowFreeText && len(req.Choices) > 0:
+	case req.AllowFreeText && textReplies && len(req.Choices) > 0:
 		lines = append(lines, "<i>Tap a button, or reply to this message with your answer.</i>")
-	case req.AllowFreeText:
+	case req.AllowFreeText && textReplies:
 		lines = append(lines, "<i>Reply to this message with your answer.</i>")
 	}
 	if len(failed) > 0 {
@@ -290,10 +293,13 @@ const replyPlaceholder = "Type your answer"
 // fallback, so two concurrent questions would both become unanswerable by
 // text. Bot API 10.3 allows force_reply on an inline keyboard, so a question
 // can offer buttons and a text box at the same time.
-func keyboard(req *hitl.Request) models.ReplyMarkup {
+// textReplies is false for a channel. Telegram answers any non-inline reply
+// markup sent to a channel with "400 Bad Request: inline keyboard expected",
+// so a channel gets buttons or nothing.
+func keyboard(req *hitl.Request, textReplies bool) models.ReplyMarkup {
 	rows := choiceRows(req.ID, req.Choices, buttonsPerRow)
 	if len(rows) == 0 {
-		if !req.AllowFreeText {
+		if !req.AllowFreeText || !textReplies {
 			return nil
 		}
 		return models.ForceReply{
@@ -304,7 +310,7 @@ func keyboard(req *hitl.Request) models.ReplyMarkup {
 	}
 	return models.InlineKeyboardMarkup{
 		InlineKeyboard: rows,
-		ForceReply:     req.AllowFreeText,
+		ForceReply:     req.AllowFreeText && textReplies,
 	}
 }
 

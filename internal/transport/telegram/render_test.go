@@ -156,7 +156,7 @@ func TestComposeQuestion(t *testing.T) {
 			},
 			AllowFreeText: true,
 		}
-		q := composeQuestion(req, nil)
+		q := composeQuestion(req, nil, true)
 		if q.Overflow {
 			t.Fatal("short question should not overflow")
 		}
@@ -175,7 +175,7 @@ func TestComposeQuestion(t *testing.T) {
 	t.Run("failed uploads are reported", func(t *testing.T) {
 		t.Parallel()
 		req := &hitl.Request{ID: "id1", Title: "t", Body: "b"}
-		q := composeQuestion(req, []string{"shot<1>.png"})
+		q := composeQuestion(req, []string{"shot<1>.png"}, true)
 		if !strings.Contains(q.Text, "Could not upload: shot&lt;1&gt;.png") {
 			t.Fatalf("missing upload failure note: %q", q.Text)
 		}
@@ -188,7 +188,7 @@ func TestComposeQuestion(t *testing.T) {
 			Title: "long",
 			Body:  strings.Repeat("word <&> ", 4000),
 		}
-		q := composeQuestion(req, nil)
+		q := composeQuestion(req, nil, true)
 		if !q.Overflow {
 			t.Fatal("oversized body should set Overflow")
 		}
@@ -210,7 +210,7 @@ func TestComposeQuestion(t *testing.T) {
 			Title: strings.Repeat("t", hitl.MaxTitleLen),
 			Body:  strings.Repeat("\U0001F600", 5000),
 		}
-		q := composeQuestion(req, nil)
+		q := composeQuestion(req, nil, true)
 		settled := q.Text + "\n\n" + outcomeLine(&hitl.Answer{
 			Status:      hitl.StatusAnswered,
 			ChoiceLabel: strings.Repeat("l", 200),
@@ -370,7 +370,7 @@ func TestKeyboardStylesAndPayloads(t *testing.T) {
 			{ID: "drop", Label: "Drop the table", Style: hitl.StyleDanger},
 		},
 	}
-	markup := keyboard(req)
+	markup := keyboard(req, true)
 	kb, ok := markup.(models.InlineKeyboardMarkup)
 	if !ok {
 		t.Fatalf("keyboard() = %T, want models.InlineKeyboardMarkup", markup)
@@ -392,7 +392,7 @@ func TestKeyboardStylesAndPayloads(t *testing.T) {
 		t.Error("a buttons-only question must not force a reply")
 	}
 
-	if keyboard(&hitl.Request{ID: "req2"}) != nil {
+	if keyboard(&hitl.Request{ID: "req2"}, true) != nil {
 		t.Fatal("a request with neither choices nor free text must not get markup")
 	}
 }
@@ -403,7 +403,7 @@ func TestKeyboardOffersATextBoxWhenFreeTextIsAllowed(t *testing.T) {
 	// force_reply is what makes the client pre-fill the reply target. Without
 	// it an incoming message has no reply_to_message, and two concurrent
 	// questions in one chat both become unanswerable by text.
-	freeOnly := keyboard(&hitl.Request{ID: "req3", AllowFreeText: true})
+	freeOnly := keyboard(&hitl.Request{ID: "req3", AllowFreeText: true}, true)
 	force, ok := freeOnly.(models.ForceReply)
 	if !ok {
 		t.Fatalf("free-text-only markup = %T, want models.ForceReply", freeOnly)
@@ -416,7 +416,7 @@ func TestKeyboardOffersATextBoxWhenFreeTextIsAllowed(t *testing.T) {
 		ID:            "req4",
 		AllowFreeText: true,
 		Choices:       []hitl.Choice{{ID: "yes", Label: "Yes"}},
-	})
+	}, true)
 	kb, ok := both.(models.InlineKeyboardMarkup)
 	if !ok {
 		t.Fatalf("mixed markup = %T, want models.InlineKeyboardMarkup", both)
@@ -426,6 +426,45 @@ func TestKeyboardOffersATextBoxWhenFreeTextIsAllowed(t *testing.T) {
 	}
 	if len(kb.InlineKeyboard) == 0 {
 		t.Error("the buttons went missing")
+	}
+}
+
+func TestKeyboardOmitsForceReplyInAChannel(t *testing.T) {
+	t.Parallel()
+
+	// Telegram answers any non-inline reply markup sent to a channel with
+	// "400 Bad Request: inline keyboard expected", which fails the whole
+	// question rather than degrading it. A channel gets buttons or nothing.
+	if got := keyboard(&hitl.Request{ID: "req5", AllowFreeText: true}, false); got != nil {
+		t.Fatalf("free-text-only markup in a channel = %T, want nil", got)
+	}
+
+	mixed := keyboard(&hitl.Request{
+		ID:            "req6",
+		AllowFreeText: true,
+		Choices:       []hitl.Choice{{ID: "yes", Label: "Yes"}},
+	}, false)
+	kb, ok := mixed.(models.InlineKeyboardMarkup)
+	if !ok {
+		t.Fatalf("mixed markup in a channel = %T, want models.InlineKeyboardMarkup", mixed)
+	}
+	if kb.ForceReply {
+		t.Error("force_reply must not be set on a channel message")
+	}
+	if len(kb.InlineKeyboard) == 0 {
+		t.Error("the buttons went missing")
+	}
+}
+
+func TestQuestionFooterPromisesNoReplyBoxInAChannel(t *testing.T) {
+	t.Parallel()
+
+	req := &hitl.Request{ID: "req7", Title: "Ship?", Body: "yes or no", AllowFreeText: true}
+	if got := questionFooter(req, nil, false); strings.Contains(got, "reply") {
+		t.Errorf("channel footer = %q, want no promise of a reply box", got)
+	}
+	if got := questionFooter(req, nil, true); !strings.Contains(got, "Reply to this message") {
+		t.Errorf("private-chat footer = %q, want the reply hint", got)
 	}
 }
 

@@ -24,6 +24,10 @@ type apiCall struct {
 	Method string
 	Values map[string]string
 	Files  map[string]string // form field -> filename
+	// EmptyForm records a well-formed multipart envelope carrying no fields
+	// at all, which is the shape Telegram rejects. A request with no body is
+	// not an EmptyForm.
+	EmptyForm bool
 }
 
 // fakeAPI is a stand-in Bot API server. It exists so the wire shape of every
@@ -31,6 +35,11 @@ type apiCall struct {
 // real HTTP instead of against a mock of our own design.
 type fakeAPI struct {
 	*httptest.Server
+
+	// chatType is what getChat reports. Empty means "private", which is the
+	// permissive case; set it to "channel" to exercise the chat kind that
+	// accepts inline keyboards and nothing else.
+	chatType string
 
 	mu        sync.Mutex
 	calls     []apiCall
@@ -49,7 +58,9 @@ func (f *fakeAPI) serve(w http.ResponseWriter, r *http.Request) {
 	method := r.URL.Path[strings.LastIndexByte(r.URL.Path, '/')+1:]
 
 	call := apiCall{Method: method, Values: map[string]string{}, Files: map[string]string{}}
+	parsed := false
 	if err := r.ParseMultipartForm(4 << 20); err == nil && r.MultipartForm != nil {
+		parsed = true
 		for k, v := range r.MultipartForm.Value {
 			call.Values[k] = v[0]
 		}
@@ -58,18 +69,38 @@ func (f *fakeAPI) serve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Telegram rejects a well-formed multipart envelope that carries no
+	// fields: measured against api.telegram.org, it answers 400 with a
+	// zero-length body, which decodes as "unexpected end of JSON input"
+	// rather than as an API error. A parameterless call must therefore send
+	// no body at all. Reproducing that here is what stops a params struct
+	// whose fields are all unset from reaching production again.
+	if parsed && len(call.Values) == 0 && len(call.Files) == 0 {
+		call.EmptyForm = true
+		f.mu.Lock()
+		f.calls = append(f.calls, call)
+		f.mu.Unlock()
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	f.mu.Lock()
 	f.calls = append(f.calls, call)
 	f.nextMsgID++
 	msgID := f.nextMsgID
 	f.mu.Unlock()
-
 	var result string
 	switch method {
 	case "getMe":
 		result = `{"id":1,"is_bot":true,"username":"herdr_hitl_bot"}`
 	case "deleteWebhook", "answerCallbackQuery":
 		result = `true`
+	case "getChat":
+		kind := f.chatType
+		if kind == "" {
+			kind = "private"
+		}
+		result = fmt.Sprintf(`{"id":-100777,"type":%q,"title":"test"}`, kind)
 	case "getUpdates":
 		// Answer the long poll immediately but not instantly, so the loop
 		// does not spin the test machine while a case waits on it.
@@ -591,4 +622,110 @@ func equalStrings(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// calls returns a copy of every request the fake API received.
+func (f *fakeAPI) calledWith() []apiCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]apiCall, len(f.calls))
+	copy(out, f.calls)
+	return out
+}
+
+func TestStartSendsNoEmptyMultipartEnvelope(t *testing.T) {
+	t.Parallel()
+
+	// Regression: Start once called DeleteWebhook with &DeleteWebhookParams{}.
+	// Every field on that struct is optional, so the client encoded a
+	// multipart form with zero fields, and Telegram answered 400 with an
+	// empty body. The daemon refused to start with the useless message
+	// "unexpected end of JSON input". The fake API reproduces that rejection,
+	// so this test fails if a parameterless call regains a params struct.
+	api := newFakeAPI(t)
+	tr := newWiredTransport(t, api, newFakeResolver())
+
+	if err := tr.Start(t.Context()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _ = tr.Close() })
+
+	if _, ok := api.last("deleteWebhook"); !ok {
+		t.Fatal("Start did not clear the webhook; getUpdates fails with 409 while one is set")
+	}
+	for _, call := range api.calledWith() {
+		if call.EmptyForm {
+			t.Fatalf("%s was sent as an empty multipart form; Telegram answers that with 400", call.Method)
+		}
+	}
+}
+
+func TestPostRefusesAFreeTextOnlyQuestionInAChannel(t *testing.T) {
+	t.Parallel()
+
+	// A channel has no reply affordance, so a question whose only answer is
+	// typed can never be answered. Posting it anyway would put a dead message
+	// in the chat and block the agent until its deadline; the operator learns
+	// nothing until then. Refusing names the problem and the two fixes.
+	api := newFakeAPI(t)
+	api.chatType = "channel"
+	tr := newWiredTransport(t, api, newFakeResolver())
+
+	if err := tr.Start(t.Context()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _ = tr.Close() })
+
+	err := tr.Post(t.Context(), &hitl.Request{
+		ID:            "abc123def456",
+		Title:         "Which pooler?",
+		Body:          "Pick one.",
+		AllowFreeText: true,
+	})
+	if err == nil {
+		t.Fatal("Post = nil, want a refusal naming the channel")
+	}
+	for _, want := range []string{"channel", "-c", "chat_id"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+	if _, sent := api.last("sendMessage"); sent {
+		t.Error("a refused question must not reach the chat")
+	}
+}
+
+func TestPostInAChannelSendsAnInlineKeyboardOnly(t *testing.T) {
+	t.Parallel()
+
+	api := newFakeAPI(t)
+	api.chatType = "channel"
+	tr := newWiredTransport(t, api, newFakeResolver())
+
+	if err := tr.Start(t.Context()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _ = tr.Close() })
+
+	if err := tr.Post(t.Context(), &hitl.Request{
+		ID:            "abc123def456",
+		Title:         "Ship it?",
+		Body:          "main is green.",
+		Choices:       []hitl.Choice{{ID: "yes", Label: "Yes"}},
+		AllowFreeText: true,
+	}); err != nil {
+		t.Fatalf("Post: %v", err)
+	}
+
+	call := api.mustLast(t, "sendMessage")
+	markup := call.Values["reply_markup"]
+	if !strings.Contains(markup, "inline_keyboard") {
+		t.Fatalf("reply_markup = %q, want an inline keyboard", markup)
+	}
+	if strings.Contains(markup, "force_reply") {
+		t.Errorf("reply_markup = %q; force_reply is rejected by a channel", markup)
+	}
+	if strings.Contains(call.Values["text"], "reply to this message") {
+		t.Error("the question promises a reply box that a channel does not have")
+	}
 }
