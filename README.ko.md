@@ -1,5 +1,11 @@
 # herdr-hitl
 
+<p align="center">
+  <img src="assets/herdr-hitl-bot-profile.png" alt="herdr-hitl 봇 프로필" width="220">
+  <br>
+  <em>에이전트에게 사람이 필요한 순간, herdr-hitl이 질문을 당신에게 가져옵니다.</em>
+</p>
+
 *[English](README.md) · 한국어*
 
 코딩 에이전트가 사람의 결정을 기다리며 멈출 수 있게 해주는 [Herdr](https://herdr.dev) 플러그인입니다. 답은 Telegram이나 Discord로 전달됩니다.
