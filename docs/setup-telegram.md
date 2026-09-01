@@ -1,6 +1,10 @@
 # Telegram setup
 
+*English · [한국어](setup-telegram.ko.md)*
+
 Ten minutes, one bot, one numeric chat id. At the end you get questions as Telegram messages with inline buttons, and answers come back as button taps or plain replies.
+
+Telegram needs no group and no channel. Questions arrive as a direct message from your bot. The one precondition is that **you message the bot first** — a bot cannot open a conversation with a person, so an unmessaged bot fails with `403 Forbidden: bot can't initiate conversation with a user`.
 
 ## 1. Create the bot
 

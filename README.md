@@ -1,5 +1,7 @@
 # herdr-hitl
 
+*English · [한국어](README.ko.md)*
+
 A [Herdr](https://herdr.dev) plugin that lets a coding agent block on a human decision delivered over Telegram or Discord. An agent halfway through a long run hits something it must not decide alone — force-push over a colleague's branch, pick between two migration strategies, supply a credential it cannot read, resolve a requirement the issue never stated. Today it either guesses, or it stops and waits for someone to notice a terminal that nobody is watching. `herdr-hitl` gives it a third option: one blocking command, `herdr-hitl ask`, that pushes the question to your phone with buttons or a text box, waits for you to answer, and prints the answer on stdout. Exit code says whether you answered, let it time out, or declined.
 
 ## Quickstart
@@ -25,6 +27,21 @@ $EDITOR "$(herdr plugin config-dir huketo.hitl)/config.toml"
 herdr-hitl doctor
 herdr-hitl ask -t "Smoke test" -m "Reply with anything." --timeout 2m
 ```
+
+### Where questions are delivered
+
+Both transports deliver by direct message. Their preconditions differ, and the difference is not obvious:
+
+| | Telegram | Discord |
+| --- | --- | --- |
+| Day-to-day surface | DM with the bot | DM with the bot |
+| Needs a group / server? | **No** | **Yes — the bot must share a server with you** |
+| One-time precondition | You message the bot first (`/start`) | You invite the bot to a server you are in |
+| Error when skipped | `403 bot can't initiate conversation with a user` | `50278 no mutual guilds` |
+
+Discord's shared server is plumbing, not a destination: no question is ever posted there and you never open it. An empty server containing only you and the bot is enough. Leave that server, or remove the bot from it, and DMs break again.
+
+Point a transport at a group or channel instead when a team should see the question — and then set `allowed_user_ids`, or anyone in that space can decide on your behalf. One target is a trap: a **Telegram channel** is broadcast-only, so it takes buttons and can never take a typed answer. `herdr-hitl doctor` says so when it detects one.
 
 ## Configuration
 
@@ -216,7 +233,34 @@ herdr-hitl version -o json
 
 ## Agent Skill
 
-The skill lives in-repo at [`skills/herdr-hitl/SKILL.md`](skills/herdr-hitl/SKILL.md) — it is the file that teaches an agent when and how to ask. Install it by symlinking it into your agent's skill directory:
+The skill lives in-repo at [`skills/herdr-hitl/SKILL.md`](skills/herdr-hitl/SKILL.md) — it is the file that teaches an agent *when* to ask, not just how. An agent that never loads it never asks.
+
+### With `npx skills` (recommended)
+
+[`skills`](https://github.com/vercel-labs/skills) is a skill installer that works across Claude Code, Cursor, Codex, Copilot, opencode, and 70-odd other harnesses.
+
+```sh
+npx skills add huketo/herdr-hitl
+```
+
+That clones the repo, finds `skills/herdr-hitl/SKILL.md` by the `skills/` convention — no manifest needed — and links it into your agent's skill directory. Useful variants:
+
+```sh
+npx skills add huketo/herdr-hitl -g                                   # install for every project
+npx skills add huketo/herdr-hitl --skill herdr-hitl -a claude-code -y # non-interactive
+npx skills add huketo/herdr-hitl#v0.1.0                               # pin to a tag
+npx skills add ./                                                     # from a local checkout
+npx skills list                                                       # what is installed
+npx skills update herdr-hitl                                          # pull a newer version
+```
+
+It installs a canonical copy at `.agents/skills/herdr-hitl` (or `~/.agents/skills/…` with `-g`) and symlinks each selected agent's directory at it, so one update reaches every harness.
+
+> The package is `skills`, plural. `npx skill` — singular — is an unrelated package that can only install from one hardcoded Vercel repository, and it will reject `huketo/herdr-hitl`.
+
+### By hand
+
+No Node, or you want the skill to track a Herdr-managed checkout:
 
 ```sh
 # From an installed plugin — plugin_root is where Herdr keeps the checkout.
@@ -227,7 +271,9 @@ ln -s "$ROOT/skills/herdr-hitl" ~/.claude/skills/herdr-hitl
 ln -s "$PWD/skills/herdr-hitl" ~/.claude/skills/herdr-hitl
 ```
 
-Symlink rather than copy so a plugin upgrade updates the skill too. See [ADR-0003](docs/adr/0003-agent-skill-distribution.md) for why the skill ships in-repo instead of being generated.
+Symlink rather than copy so a plugin upgrade updates the skill too.
+
+The skill is English-only on purpose: the CLI flags and exit codes are English, and two skills with overlapping trigger descriptions would both fire and drift apart. See [ADR-0003](docs/adr/0003-agent-skill-distribution.md) for why it ships in-repo instead of being generated.
 
 ## Architecture
 
