@@ -41,11 +41,34 @@ curl -s "https://api.telegram.org/bot123456789:AAFxxxx/getUpdates" | jq '.result
 
 `987654321` is your `chat_id`. For a group, add the bot to the group, post any message there, and take the group's `id` — it is negative, e.g. `-1001234567890`.
 
-Two things break this step:
+### Pick the right kind of chat
+
+The chat kind decides which answers are possible. A private chat with the bot is the recommended target.
+
+| Chat kind | Buttons | Typed answers | Who can answer |
+| --- | --- | --- | --- |
+| Private chat with the bot | yes | yes | only you |
+| Group / supergroup | yes | yes | every member — set `allowed_user_ids` |
+| **Channel** | yes | **no** | every admin |
+
+A **channel is broadcast-only**: it has no reply box, so a typed answer can never arrive. Telegram rejects the reply prompt outright with `400 Bad Request: inline keyboard expected`. `herdr-hitl` detects this at startup, drops the prompt, and refuses a question that offers no `-c` choices rather than posting one nobody can answer. `herdr-hitl doctor` names it:
+
+```
+OK  connection  telegram: @yourbot -> channel -1004434377702 (buttons only; free-text answers are impossible)
+```
+
+Both channel ids and supergroup ids start with `-100`, so they look identical. Check with `getChat`:
+
+```sh
+curl -s "https://api.telegram.org/bot<TOKEN>/getChat?chat_id=-1004434377702" | jq -r '.result.type'
+```
+
+Four things break this step:
 
 - **Empty `result` array.** Either you have not messaged the bot yet, or something already consumed the update (see step 5 — `getUpdates` is destructive). Send another message and retry.
 - **`409 Conflict: terminated by other getUpdates request`.** Another poller holds the token. Stop the `herdr-hitl` daemon (`herdr-hitl daemon stop`) before running `curl`.
 - **`409 Conflict: can't use getUpdates method while webhook is active`.** A webhook is set on this token. Clear it: `curl -s "https://api.telegram.org/bot<TOKEN>/deleteWebhook?drop_pending_updates=true"`. `herdr-hitl` uses long polling exclusively (see [ADR-0002](adr/0002-messenger-transports-telegram-gateway-discord.md)); a webhook and long polling cannot coexist on one token.
+- **You used the bot's own id.** `getMe` returns the *bot's* id; `getChat` on it reports `type: private` and looks plausible. Your id is the `from.id` on a message you sent, not the bot's.
 
 ## 3. Write the config
 
@@ -118,5 +141,6 @@ Free text works too — reply to the bot's message with any text and that text l
 | `409 Conflict: terminated by other getUpdates request` | A second poller — another daemon, or your own `curl`. Stop it. |
 | `409 Conflict: can't use getUpdates method while webhook is active` | Run `deleteWebhook`. |
 | Buttons tap but nothing happens | Your Telegram user id is not in `allowed_user_ids`. |
+| `400 Bad Request: inline keyboard expected` | The target is a channel. Channels take buttons only — give the question `-c` choices, or point `chat_id` at a private chat, group, or supergroup. |
 | Message arrives, answer never returns | The daemon died mid-ask. `herdr-hitl daemon status`, then check the log path from `herdr-hitl config path`. |
 | Attachment rejected | Attachments are capped at 10 MiB and 10 per question. |
