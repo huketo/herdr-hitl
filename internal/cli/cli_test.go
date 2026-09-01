@@ -19,6 +19,7 @@ import (
 
 	"github.com/huketo/herdr-hitl/internal/hitl"
 	"github.com/huketo/herdr-hitl/internal/ipc"
+	"github.com/huketo/herdr-hitl/internal/paths"
 )
 
 func TestExitCode(t *testing.T) {
@@ -128,7 +129,7 @@ func newHarness(t *testing.T) *harness {
 	t.Setenv("HITL_CONFIG_DIR", t.TempDir())
 
 	h := &harness{handler: &fakeHandler{}}
-	h.endpoint = filepath.Join(t.TempDir(), "d.sock")
+	h.endpoint = testEndpoint(t)
 
 	l, err := ipc.Listen(h.endpoint)
 	if err != nil {
@@ -547,4 +548,25 @@ func hasSub(cmd *cobra.Command, name string) bool {
 		}
 	}
 	return false
+}
+
+// testEndpoint resolves a daemon endpoint the same way production does.
+//
+// Building one by hand looks harmless and is not. A Unix socket path is capped
+// near 104 bytes on macOS, and t.TempDir() embeds the test name, so a
+// long-named subtest overflows it and bind fails with "invalid argument". On
+// Windows the endpoint is not a filesystem path at all but a named pipe, and
+// handing winio a temp-directory path fails with "Incorrect function".
+//
+// paths.Socket already handles both. The test's job is to point it at a
+// throwaway state directory, not to reimplement it.
+func testEndpoint(t *testing.T) string {
+	t.Helper()
+
+	t.Setenv(paths.EnvStateDir, t.TempDir())
+	endpoint, err := paths.Socket()
+	if err != nil {
+		t.Fatalf("resolve socket: %v", err)
+	}
+	return endpoint
 }
