@@ -67,7 +67,6 @@
   ],
   "packages": {
     ".": {
-      "package-name": "herdr-hitl",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         {
