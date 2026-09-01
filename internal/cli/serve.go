@@ -227,6 +227,9 @@ func runDaemonStatus(cmd *cobra.Command, g *globals, format string) error {
 	fmt.Fprintf(out, "version   %s\n", st.Version)
 	fmt.Fprintf(out, "socket    %s\n", st.Socket)
 	fmt.Fprintf(out, "transports %s\n", listOr(st.Transports, "none"))
+	for _, detail := range st.Descriptions {
+		fmt.Fprintf(out, "          %s\n", detail)
+	}
 	fmt.Fprintf(out, "pending   %d\n", st.Pending)
 	fmt.Fprintf(out, "uptime    %s (since %s)\n", st.Uptime, st.StartedAt)
 	return nil

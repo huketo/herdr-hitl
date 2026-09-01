@@ -90,9 +90,13 @@ type Status struct {
 	Version    string   `json:"version"`
 	Socket     string   `json:"socket"`
 	Transports []string `json:"transports"`
-	Pending    int      `json:"pending"`
-	StartedAt  string   `json:"started_at"`
-	Uptime     string   `json:"uptime"`
+	// Descriptions is each transport's own one-line summary, which is where
+	// a limitation the config cannot show up in — such as a Telegram target
+	// that turns out to be a channel — becomes visible before the first ask.
+	Descriptions []string `json:"descriptions,omitempty"`
+	Pending      int      `json:"pending"`
+	StartedAt    string   `json:"started_at"`
+	Uptime       string   `json:"uptime"`
 }
 
 // ErrorCode classifies a failure so the CLI can pick an exit status without

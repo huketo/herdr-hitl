@@ -116,6 +116,13 @@ func Run(ctx context.Context, opts Options) error {
 	defer closeTransports(started, log)
 
 	svc := newService(cfg, broker, log, endpoint, opts.Version)
+	svc.describe = func() []string {
+		out := make([]string, 0, len(started))
+		for _, tr := range started {
+			out = append(out, tr.Describe())
+		}
+		return out
+	}
 	defer svc.wait()
 
 	go func() {

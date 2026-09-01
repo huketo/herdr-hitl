@@ -130,6 +130,12 @@ func runChecks(ctx context.Context, g *globals) *report {
 		} else if st := resp.Status; st != nil {
 			add("daemon", stateOK, "pid %d, version %s, %d pending, up %s, transports %s",
 				st.PID, st.Version, st.Pending, st.Uptime, listOr(st.Transports, "none"))
+			// A live transport knows things the config cannot: which bot it
+			// authenticated as, and whether the destination can accept a
+			// typed answer at all.
+			for _, detail := range st.Descriptions {
+				add("connection", stateOK, "%s", detail)
+			}
 		} else {
 			add("daemon", stateWarn, "running but reported no status")
 		}

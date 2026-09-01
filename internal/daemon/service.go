@@ -49,6 +49,10 @@ type service struct {
 	start    time.Time
 	now      func() time.Time
 
+	// describe reports each live transport's summary. Run installs it once
+	// the transports are up; nil means none were registered.
+	describe func() []string
+
 	// stop is closed once by Shutdown. Run watches it rather than tearing the
 	// process down inline, so the response to `shutdown` is written before
 	// the listener closes.
@@ -155,19 +159,28 @@ func (s *service) CancelRequest(_ context.Context, p *ipc.CancelParams) error {
 	return s.broker.Cancel(p.RequestID, p.Reason)
 }
 
+// transportDescriptions returns the live transport summaries, or nil.
+func (s *service) transportDescriptions() []string {
+	if s.describe == nil {
+		return nil
+	}
+	return s.describe()
+}
+
 // Status reports what the daemon is doing.
 func (s *service) Status(context.Context) (*ipc.Status, error) {
 	defer s.enter()()
 
 	now := s.now()
 	return &ipc.Status{
-		PID:        os.Getpid(),
-		Version:    s.version,
-		Socket:     s.endpoint,
-		Transports: s.broker.TransportNames(),
-		Pending:    s.broker.PendingCount(),
-		StartedAt:  s.start.Format(time.RFC3339),
-		Uptime:     now.Sub(s.start).Truncate(time.Second).String(),
+		PID:          os.Getpid(),
+		Version:      s.version,
+		Socket:       s.endpoint,
+		Transports:   s.broker.TransportNames(),
+		Descriptions: s.transportDescriptions(),
+		Pending:      s.broker.PendingCount(),
+		StartedAt:    s.start.Format(time.RFC3339),
+		Uptime:       now.Sub(s.start).Truncate(time.Second).String(),
 	}, nil
 }
 
