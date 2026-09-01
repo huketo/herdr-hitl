@@ -94,20 +94,30 @@ func TestReleaseConfigUpdatesThePluginManifest(t *testing.T) {
 	if !ok {
 		t.Fatal(`release-please-config.json has no "." package`)
 	}
+	want := map[string]string{
+		// The manifest version Herdr shows the user.
+		"herdr-plugin.toml": "toml",
+		// The version a build without a linker stamp falls back to, which is
+		// every Herdr plugin build.
+		"internal/cli/buildinfo.go": "generic",
+	}
 	for _, f := range root.ExtraFiles {
-		if f.Path != "herdr-plugin.toml" {
+		kind, tracked := want[f.Path]
+		if !tracked {
 			continue
 		}
-		if f.Type != "toml" {
-			t.Errorf("extra-files entry for %s has type %q, want \"toml\"", f.Path, f.Type)
+		if f.Type != kind {
+			t.Errorf("extra-files entry for %s has type %q, want %q", f.Path, f.Type, kind)
 		}
-		if f.JSONPath != "$.version" {
+		if f.Path == "herdr-plugin.toml" && f.JSONPath != "$.version" {
 			t.Errorf("extra-files entry for %s has jsonpath %q, want \"$.version\"", f.Path, f.JSONPath)
 		}
-		return
+		delete(want, f.Path)
 	}
-	t.Error("release-please-config.json does not list herdr-plugin.toml in extra-files, " +
-		"so the plugin version will stop tracking releases")
+	for path := range want {
+		t.Errorf("release-please-config.json does not list %s in extra-files, "+
+			"so its version will stop tracking releases", path)
+	}
 }
 
 // repoRoot walks up from the package directory to the module root.
@@ -130,4 +140,26 @@ func repoRoot(t *testing.T) string {
 	}
 	t.Fatal("could not find the module root from " + strings.TrimSpace(dir))
 	return ""
+}
+
+// TestFallbackVersionTracksTheReleaseManifest is the buildinfo half of the
+// same invariant: release-please rewrites the annotated constant, and a
+// mismatch means the annotation stopped matching and every plugin build now
+// reports a stale version.
+func TestFallbackVersionTracksTheReleaseManifest(t *testing.T) {
+	t.Parallel()
+
+	raw, err := os.ReadFile(filepath.Join(repoRoot(t), ".release-please-manifest.json"))
+	if err != nil {
+		t.Skipf("release manifest unavailable: %v", err)
+	}
+	var released map[string]string
+	if err := json.Unmarshal(raw, &released); err != nil {
+		t.Fatalf("parse .release-please-manifest.json: %v", err)
+	}
+	if want := released["."]; fallbackVersion != want {
+		t.Errorf("fallbackVersion = %q, release manifest says %q; "+
+			"the x-release-please-version annotation in buildinfo.go is not being applied",
+			fallbackVersion, want)
+	}
 }

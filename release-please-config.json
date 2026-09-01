@@ -73,6 +73,10 @@
           "type": "toml",
           "path": "herdr-plugin.toml",
           "jsonpath": "$.version"
+        },
+        {
+          "type": "generic",
+          "path": "internal/cli/buildinfo.go"
         }
       ]
     }
