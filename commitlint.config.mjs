@@ -9,7 +9,17 @@ export default {
 	extends: ["@commitlint/config-conventional"],
 	// release-please authors "chore(main): release X.Y.Z"; the "main" scope is
 	// deliberately absent from scope-enum, so skip those generated commits.
-	ignores: [(message) => /^chore\(main\): release /.test(message)],
+	// Bot-authored subjects. Both are generated, both are guaranteed to be
+	// conventional — release-please builds its own title, and Dependabot's type
+	// and scope come from commit-message.prefix in .github/dependabot.yml. What
+	// is not guaranteed is length: a single-dependency group title carries an
+	// "in the <group> group across 1 directory" suffix that can exceed
+	// header-max-length, and Dependabot rewrites the title on every rebase and
+	// recreate, so editing it by hand does not survive.
+	ignores: [
+		(message) => /^chore\(main\): release /.test(message),
+		(message) => /^chore\((?:deps|deps-dev|ci)\): bump /.test(message),
+	],
 	rules: {
 		"type-enum": [
 			2,

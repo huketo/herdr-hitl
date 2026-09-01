@@ -16,7 +16,7 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     groups:
-      go-minor-patch:
+      go:
         applies-to: version-updates
         update-types:
           - minor
@@ -33,7 +33,7 @@ updates:
     commit-message:
       prefix: "chore(ci)"
     groups:
-      actions-minor-patch:
+      actions:
         applies-to: version-updates
         update-types:
           - minor
