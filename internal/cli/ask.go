@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -235,7 +237,7 @@ func runAsk(cmd *cobra.Command, g *globals, o *askOptions) error {
 		return silentCode(ExitCanceled, outcome)
 
 	default:
-		return failf("ask: %w", outcome)
+		return failf("ask: %w", explainDaemonLoss(outcome))
 	}
 }
 
@@ -286,9 +288,47 @@ func runNotify(cmd *cobra.Command, g *globals, o *askOptions) error {
 	defer func() { _ = client.Close() }()
 
 	if _, err := client.Do(ctx, &ipc.Request{Op: ipc.OpNotify, Notify: params}); err != nil {
-		return failf("notify: %w", err)
+		return failf("notify: %w", explainDaemonLoss(err))
 	}
 	return nil
+}
+
+// explainDaemonLoss adds what the daemon said before it died.
+//
+// The daemon binds the endpoint before it starts its transports, so a daemon
+// that cannot reach Telegram or Discord still answers the probe and then
+// exits mid-request. Reported bare, that reaches the user as
+// "read: connection reset by peer", which is true and useless. The daemon
+// wrote the real reason to its log one moment earlier; this puts the two
+// together.
+func explainDaemonLoss(err error) error {
+	if err == nil {
+		return nil
+	}
+	if !isConnectionLoss(err) {
+		return err
+	}
+	if last := daemon.LastFailure(); last != "" {
+		return fmt.Errorf("the daemon exited while handling the request: %s", last)
+	}
+	return fmt.Errorf("%w (the daemon exited; see the log named by `herdr-hitl doctor`)", err)
+}
+
+// isConnectionLoss reports whether err means the daemon went away rather than
+// refused the request.
+func isConnectionLoss(err error) bool {
+	switch {
+	case errors.Is(err, io.EOF), errors.Is(err, syscall.ECONNRESET), errors.Is(err, syscall.EPIPE):
+		return true
+	case errors.Is(err, ipc.ErrDaemonUnavailable):
+		return true
+	default:
+		// A daemon that dies mid-write surfaces as a *net.OpError whose
+		// wrapped errno varies by platform; the wire error is never an
+		// ipc.Error, so anything that is not one is a transport-level loss.
+		var wire *ipc.Error
+		return !errors.As(err, &wire) && errors.Is(err, net.ErrClosed)
+	}
 }
 
 // connect dials the daemon, optionally starting it first. Commands that only
