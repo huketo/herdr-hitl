@@ -15,7 +15,7 @@ import (
 // runs `[[build]]` commands as argv with no shell, so the manifest cannot
 // compute `-X main.version=$(git describe)`, and Herdr clones without tags so
 // the toolchain cannot infer one either.
-const fallbackVersion = "0.1.4" // x-release-please-version
+const fallbackVersion = "0.2.0" // x-release-please-version
 
 // devVersion is what main.go carries when no linker stamp was applied.
 const devVersion = "dev"

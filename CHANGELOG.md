@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/huketo/herdr-hitl/compare/v0.1.4...v0.2.0) (2026-09-03)
+
+
+### Features
+
+* **channel:** route questions by declared presence ([#20](https://github.com/huketo/herdr-hitl/issues/20)) ([f21d82c](https://github.com/huketo/herdr-hitl/commit/f21d82c3ec08a0df0dbffb903f621d1b5dbd59b3))
+
 ## [0.1.4](https://github.com/huketo/herdr-hitl/compare/v0.1.3...v0.1.4) (2026-09-01)
 
 
