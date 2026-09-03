@@ -151,6 +151,21 @@ func LogFile() (string, error) {
 	return filepath.Join(state, "daemon.log"), nil
 }
 
+// AwayFile returns the path of the Away marker: the file a human creates with
+// `herdr-hitl away` to say that questions should leave the terminal and go to
+// a messenger.
+//
+// It lives in the state directory, not the config directory. It is mutable
+// runtime state that changes several times a day, and it must be resolved
+// identically by every asking process for the same reason the socket must be.
+func AwayFile() (string, error) {
+	state, err := StateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(state, "away"), nil
+}
+
 // ConfigFile returns the path of config.toml.
 func ConfigFile() (string, error) {
 	dir, err := ConfigDir()

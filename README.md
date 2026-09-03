@@ -49,6 +49,33 @@ Discord's shared server is plumbing, not a destination: no question is ever post
 
 Point a transport at a group or channel instead when a team should see the question — and then set `allowed_user_ids`, or anyone in that space can decide on your behalf. One target is a trap: a **Telegram channel** is broadcast-only, so it takes buttons and can never take a typed answer. `herdr-hitl doctor` says so when it detects one.
 
+### Route questions by presence
+
+A human at the keyboard should not be paged for a decision they can answer in the pane they are looking at. No focus, idle-time, or attached-client probe can establish that reliably, so routing uses declared state for each question.
+
+The recommended interactive setup is:
+
+```toml
+channel = "auto"
+```
+
+With `auto`, questions stay in the terminal while you are present and go to the messenger while the Away marker is set:
+
+```sh
+herdr-hitl away
+herdr-hitl here
+```
+
+`herdr-hitl away --for 2h` sets an expiry; without `--for`, the marker remains until you clear it. The marker is `<state dir>/away`, contains `forever` or an RFC 3339 expiry, and is created with mode `0600`. A malformed marker counts as away; an expired marker does not.
+
+An unattended launcher, such as a scheduler or a detached agent run, should declare that nobody is watching:
+
+```sh
+export HITL_CHANNEL=messenger
+```
+
+Each `ask` or `notify` resolves its policy in this order: `--channel messenger|terminal|auto`, `HITL_CHANNEL`, `channel` in `config.toml`, then the default `messenger`. `HITL_CHANNEL` and `channel` accept only those three values; an invalid value is a configuration error at load time. If the result is `terminal`, nothing contacts the daemon or messenger; the command explains that the agent must ask in its own interface on stderr and exits `5`. The agent must not treat that status as approval or retry the delivery. Use `--channel messenger` to override one call.
+
 ## Configuration
 
 Two files, both in the config directory:
@@ -71,6 +98,8 @@ These locations do not change when Herdr launches the binary. Herdr injects `HER
 ### `config.toml`
 
 ```toml
+# Route questions through messenger (default), terminal, or the Away marker (auto).
+channel = "auto"
 # Transports used when `ask` omits --transport, in delivery order.
 transports = ["telegram"]
 # Default deadline for `ask`. 0 waits forever.
@@ -110,6 +139,7 @@ pane_tokens = true        # expose pending state as a pane token for the status 
 | `HITL_DISCORD_CHANNEL_ID` | `discord.channel_id` | `DISCORD_CHANNEL_ID` |
 | `HITL_DISCORD_USER_ID` | `discord.user_id` | — |
 | `HITL_TRANSPORTS` | `transports` (comma-separated) | — |
+| `HITL_CHANNEL` | `channel` | — |
 | `HITL_TIMEOUT` | `timeout` | — |
 | `HITL_LOG_LEVEL` | `daemon.log_level` | — |
 | `HITL_IDLE_SHUTDOWN` | `daemon.idle_shutdown` | — |
@@ -136,6 +166,7 @@ pane_tokens = true        # expose pending state as a pane token for the status 
 | `-a, --attach strings` | Repeatable path to an image or document (`.md`, `.html`, `.png`, …). |
 | `--timeout duration` | Deadline. Default from config (`30m`). `0` waits forever. |
 | `--transport strings` | `telegram`, `discord`. Default from config. |
+| `--channel string` | `messenger`, `terminal`, or `auto`. Overrides routing for this call. |
 | `--agent string` | Label shown to the human. Default `$HITL_AGENT`, else `agent`. |
 | `--default string` | Text to print if the deadline passes, instead of failing. |
 | `-o, --format string` | `text` or `json`. Default `text`. |
@@ -152,11 +183,37 @@ ANSWER=$(herdr-hitl ask \
 
 ### `notify` — fire-and-forget message, never blocks
 
-Flags: `-t/--title`, `-m/--message`, `--message-file`, `-a/--attach`, `--transport`, `--agent`.
+Flags: `-t/--title`, `-m/--message`, `--message-file`, `-a/--attach`, `--transport`, `--channel`, `--agent`.
 
 ```sh
 herdr-hitl notify -t "Migration finished" -m "42 tables, 0 errors, 6m12s." -a report.md
 ```
+
+### `channel` — print the resolved destination
+
+```sh
+herdr-hitl channel
+herdr-hitl channel -o json
+```
+
+Text output is exactly `messenger` or `terminal`. JSON output contains `channel`, `policy`, `reason`, and, when set, `away_until`. The reason is `flag`, `config`, `away marker`, `no away marker`, `away marker expired`, or `default`.
+
+### `away` — declare that nobody is watching the terminal
+
+```sh
+herdr-hitl away
+herdr-hitl away --for 2h
+```
+
+Without `--for`, the marker remains until cleared. The command prints what it wrote and the resolved channel, so a marker that does not affect `channel = "messenger"` is visible immediately.
+
+### `here` — declare that a human is watching the terminal
+
+```sh
+herdr-hitl here
+```
+
+Clears the Away marker and prints the resolved channel.
 
 ### `pending` — list questions currently awaiting an answer
 
@@ -202,6 +259,8 @@ herdr-hitl daemon stop
 herdr-hitl doctor -o json
 ```
 
+The `channel` check is `OK` when the resolved route delivers and `WARN` when it does not. It includes the reason and a hint to run `herdr-hitl away`.
+
 ### `config` — inspect and scaffold
 
 ```sh
@@ -231,6 +290,7 @@ herdr-hitl version -o json
 | `2` | Usage error — unknown flag, missing required flag, bad value. |
 | `3` | Timeout — the deadline passed with no answer. `--default` converts this to `0`. |
 | `4` | Canceled or declined — the human dismissed it, or the daemon was told to cancel. |
+| `5` | Terminal channel — nothing was sent. Ask in the current interface; this is never approval. |
 
 ## Messenger setup
 

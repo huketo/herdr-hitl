@@ -1,11 +1,11 @@
 ---
 name: herdr-hitl
-description: Ask the human a question and block until they answer, delivered to their phone over Telegram or Discord. Use when you need a decision, approval, credential, missing requirement, or judgement call you cannot make alone — and especially when the human is away from the terminal and would otherwise never see the prompt. Triggers on needing permission for a destructive or irreversible action, choosing between designs with real tradeoffs, a secret or value only the human has, an ambiguous or contradictory requirement, or announcing the end of a long unattended run.
+description: Ask the human a question and block until they answer, either in the agent's interface or over Telegram or Discord. Use when you need a decision, approval, credential, missing requirement, or judgement call you cannot make alone — and especially when the human is away from the terminal and would otherwise never see the prompt. Triggers on needing permission for a destructive or irreversible action, choosing between designs with real tradeoffs, a secret or value only the human has, an ambiguous or contradictory requirement, or announcing the end of a long unattended run.
 ---
 
 # Asking a human
 
-You are running unattended. When you hit something you must not decide alone, do not guess and do not stop silently in a terminal nobody is watching. Ask, block, and continue with the answer.
+You may be running unattended. When you hit something you must not decide alone, do not guess and do not stop silently in a terminal nobody is watching. Ask, block, and continue with the answer.
 
 ## When to ask
 
@@ -40,6 +40,12 @@ If you cannot state a concrete consequence for each option, you do not have a qu
 HITL=$(command -v herdr-hitl || echo "${HERDR_PLUGIN_ROOT:-}/bin/herdr-hitl")
 [ -x "$HITL" ] || { herdr plugin action invoke huketo.hitl.install-cli; HITL=$(command -v herdr-hitl); }
 ```
+Before every question, resolve the channel with `herdr-hitl channel`:
+
+1. `messenger` — deliver it with `herdr-hitl ask`.
+2. `terminal` — the human is at your own interface. Ask there and do not call `herdr-hitl ask`.
+
+The human toggles their presence with `herdr-hitl away` and `herdr-hitl here`. These are human commands; never run them. The `ask` examples below apply only to the `messenger` branch.
 
 ## Command surface
 
@@ -57,8 +63,10 @@ herdr-hitl ask [flags]
       --transport strings   telegram | discord (default: config)
       --agent string        label shown to the human (default $HITL_AGENT, else "agent")
       --default string      text to print if the deadline passes, instead of failing
+      --channel string      messenger | terminal | auto (default: config)
   -o, --format string       text | json (default text)
-herdr-hitl notify [-t|-m|--message-file|-a|--transport|--agent]
+herdr-hitl notify [-t|-m|--message-file|-a|--transport|--agent|--channel]
+herdr-hitl channel [-o text|json]
 herdr-hitl pending [-o text|json]
 herdr-hitl answer <request-id> [--choice ID] [--text TEXT]
 herdr-hitl cancel <request-id> [--reason TEXT]
@@ -145,6 +153,7 @@ herdr-hitl notify -t "Migration finished" \
 | `2` | Usage error | Your command was wrong. Fix the flags. |
 | `3` | Timeout | Nobody answered. Take the safe path or stop; do not proceed as if approved. |
 | `4` | Canceled or declined | The human said no. Stop that line of work. |
+| `5` | Terminal channel | Nothing was sent. Ask in your own interface; do not retry. |
 
 ```sh
 set +e
@@ -155,15 +164,16 @@ case $CODE in
   0) echo "proceeding: $ANSWER" ;;
   3) echo "no answer in 30m — skipping the deploy and reporting instead" ;;
   4) echo "declined — stopping" ;;
+  5) echo "nothing sent — ask in your own interface; do not retry" ;;
   *) echo "hitl failed ($CODE)" >&2; exit "$CODE" ;;
 esac
 ```
 
-Never treat `3` or `4` as approval. If a timeout has a safe default, encode it with `--default` so the command exits `0` and prints that value.
+Never treat `3`, `4`, or `5` as approval. Exit `5` is not a failure to retry; it means ask in your own interface. If a timeout has a safe default, encode it with `--default` so the command exits `0` and prints that value.
 
 ## Writing a good question
 
-The human is on a phone, in a queue, with ten seconds of attention.
+The human may be on a phone, in a queue, with ten seconds of attention.
 
 - **Title: the decision, not the topic.** "Force-push to main?" beats "Question about git".
 - **State the decision in the first sentence.** No preamble, no recap of what you have been doing.

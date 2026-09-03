@@ -121,7 +121,7 @@ func newHarness(t *testing.T) *harness {
 		"HITL_DISCORD_BOT_TOKEN", "DISCORD_BOT_TOKEN",
 		"HITL_DISCORD_CHANNEL_ID", "DISCORD_CHANNEL_ID",
 		"HITL_DISCORD_USER_ID", "HITL_TRANSPORTS", "HITL_TIMEOUT",
-		"HITL_LOG_LEVEL", "HITL_IDLE_SHUTDOWN", "HITL_AGENT",
+		"HITL_LOG_LEVEL", "HITL_IDLE_SHUTDOWN", "HITL_AGENT", "HITL_CHANNEL",
 		"HERDR_PLUGIN_CONTEXT_JSON", "HERDR_PANE_ID", "HERDR_TAB_ID",
 		"HERDR_WORKSPACE_ID",
 	} {
@@ -522,6 +522,7 @@ func TestRootCommandTree(t *testing.T) {
 	want := []string{
 		"ask", "notify", "pending", "answer", "cancel", "serve",
 		"daemon", "doctor", "config", "install-cli", "version",
+		"channel", "away", "here",
 	}
 	have := make(map[string]*cobra.Command, len(root.Commands()))
 	for _, c := range root.Commands() {

@@ -36,6 +36,18 @@ Attachments are the intended way to include a diff, a plan, a log, or a screensh
 
 Who is asking, and from where. `hitl.Origin` — host, user, cwd, agent label, and the Herdr workspace/tab/pane ids when running under Herdr. `Origin.Label()` renders the one line the human sees so they can tell which of several concurrent runs is blocked.
 
+### Channel
+
+The class of destination for a Question. `channel.Channel` is either `messenger`, which delivers through a Transport, or `terminal`, which means the human is at the agent's own interface and the agent must ask there. `channel.Policy` is the setting before presence is considered: `messenger`, `terminal`, or `auto`. `channel.Decision` carries the resolved Channel, the effective Policy, the reason, and any Away marker expiry.
+
+A resolved Decision is never `auto`: that Policy resolves per Question to `messenger` or `terminal`, in the asking CLI process rather than the shared Daemon. A `terminal` Decision never reaches the Daemon or a Transport. It exits `5`, which means "ask in your own interface", never approval. See [ADR-0004](docs/adr/0004-channel-routing-by-declared-presence.md).
+
+### Away marker
+
+The human's declaration that nobody is watching the agent's interface. `channel.Marker` is read from the `away` file in the state directory and records whether it exists, when it expires, and whether its contents were malformed. `herdr-hitl away` writes `forever` or an RFC 3339 expiry; `herdr-hitl here` removes it.
+
+The Away marker is consulted only under the `auto` Policy. Set and unexpired means `messenger`; absent or expired means `terminal`. A malformed marker counts as away, because one unwanted notification is safer than stranding an unattended run.
+
 ### Transport
 
 A messenger integration: Telegram or Discord. `transport.Transport` = `hitl.Poster` plus `Start`, `Close`, and `Describe`. A Transport owns a connection and translates between the domain and one messenger's API. It never interprets a Question's meaning.
@@ -100,10 +112,11 @@ The Markdown document at `skills/herdr-hitl/SKILL.md` that teaches an agent *whe
 - **"Notification."** Reserved for the fire-and-forget path (`herdr-hitl notify`) — something a human reads and need not act on. A Question is not a notification; it blocks.
 - **"Session," "ticket," "task."** Overloaded elsewhere in the Herdr ecosystem. A Question is a Question.
 - **"Reply."** A messenger-layer word. The domain word is **Answer**.
+- **"Channel" for a Discord channel id.** A **Channel** is the routing destination class for a Question. A Discord channel id is a Transport setting.
 
 ## The ask lifecycle
 
-1. An agent runs `herdr-hitl ask -t … -m … -c …`. The CLI parses flags, resolves attachment paths into Attachments, fills in Origin from the environment, and builds an `ipc.AskParams`.
+1. An agent runs `herdr-hitl ask -t … -m … -c …`. The CLI parses flags and resolves a `channel.Decision`: `--channel`, then `HITL_CHANNEL`, then `channel` in `config.toml`, then the `messenger` default; an `auto` Policy consults the Away marker. A `terminal` Decision sends nothing, prints an instruction to ask in the agent's own interface, and exits `5`. Only a `messenger` Decision continues: the CLI resolves attachment paths into Attachments, fills in Origin from the environment, and builds an `ipc.AskParams`.
 2. The CLI ensures a Daemon is live: `ipc.Probe` on the Endpoint, and if nothing answers, spawn a detached `serve` and wait for the probe to succeed.
 3. The CLI dials the Endpoint and sends `ipc.OpAsk`. **It holds the connection open for the entire ask.** This is load-bearing: the Daemon derives the Question's context from this connection, so a dead client cancels its own Question.
 4. The Daemon builds a `hitl.Request`, validates it, and calls `Broker.Submit`. The Broker registers the Question as Pending and calls `Post` on each selected Poster.

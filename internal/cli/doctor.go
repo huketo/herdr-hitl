@@ -123,6 +123,7 @@ func runChecks(ctx context.Context, g *globals) *report {
 		add("config", stateFail, "%v", cfgErr)
 	} else {
 		add("config", stateOK, "loaded from %s", sourceOr(cfg))
+		addChannelCheck(add, cfg)
 		addTransportChecks(add, cfg)
 	}
 
@@ -158,6 +159,24 @@ func runChecks(ctx context.Context, g *globals) *report {
 		}
 	}
 	return rep
+}
+
+// addChannelCheck reports where a question would go right now.
+//
+// It is a warning rather than an ok when nothing would be delivered: a
+// perfectly configured transport that never receives a question is the one
+// symptom this report exists to explain.
+func addChannelCheck(add func(string, checkState, string, ...any), cfg *config.Config) {
+	decision, err := resolveChannel("", cfg)
+	if err != nil {
+		add("channel", stateFail, "%v", err)
+		return
+	}
+	if decision.Delivers() {
+		add("channel", stateOK, "%s", describe(decision))
+		return
+	}
+	add("channel", stateWarn, "%s; `ask` exits 5 without sending. `herdr-hitl away` switches it", describe(decision))
 }
 
 // addTransportChecks reports whether each transport is usable, without ever

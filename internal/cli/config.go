@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/huketo/herdr-hitl/internal/channel"
 	"github.com/huketo/herdr-hitl/internal/config"
 	"github.com/huketo/herdr-hitl/internal/paths"
 )
@@ -37,6 +38,19 @@ transports = []
 
 # Default answer deadline. "0" waits forever.
 timeout = "30m"
+
+# Where questions go.
+#
+#   "messenger" — always deliver to Telegram or Discord (the default).
+#   "auto"      — deliver only while the away marker is set, so an agent
+#                 running next to a human at the keyboard is told to ask in
+#                 its own interface (ask exits 5) instead of buzzing a
+#                 phone. Toggle with "herdr-hitl away" and "herdr-hitl here".
+#   "terminal"  — never deliver.
+#
+# HITL_CHANNEL overrides this per process, which is how an unattended
+# launcher (a scheduler, a detached run) declares that nobody is watching.
+channel = "messenger"
 
 [telegram]
 # enabled = true
@@ -171,6 +185,7 @@ func writeMaskedConfig(w io.Writer, cfg *config.Config) error {
 
 	fmt.Fprintf(&b, "transports = %s\n", tomlStrings(cfg.Transports))
 	fmt.Fprintf(&b, "timeout = %q\n", cfg.Timeout.String())
+	fmt.Fprintf(&b, "channel = %q\n", channelOr(cfg.Channel))
 
 	fmt.Fprintf(&b, "\n[telegram]\n")
 	fmt.Fprintf(&b, "enabled = %t\n", cfg.Telegram.IsEnabled())
@@ -226,4 +241,13 @@ func logLevelOr(level string) string {
 		return "info"
 	}
 	return level
+}
+
+// channelOr renders the effective routing policy, which is "messenger" when
+// the key is absent.
+func channelOr(policy string) string {
+	if strings.TrimSpace(policy) == "" {
+		return string(channel.PolicyMessenger)
+	}
+	return policy
 }
