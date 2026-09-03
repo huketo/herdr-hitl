@@ -5,7 +5,7 @@ It MUST be a valid conventional commit:
   <type>(<scope>): <subject>
 
 types:  feat fix perf refactor revert docs test build ci style chore
-scopes: cli daemon broker telegram discord config ipc skill plugin docs ci deps
+scopes: cli daemon paths herdrctl channel broker telegram discord config ipc skill plugin docs ci deps
 
 Examples:
   feat(telegram): add inline keyboard for predefined choices

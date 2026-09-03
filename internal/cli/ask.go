@@ -33,6 +33,7 @@ type askOptions struct {
 	timeout     time.Duration
 	transports  []string
 	agent       string
+	channel     string
 	deflt       string
 	format      string
 }
@@ -46,6 +47,7 @@ func (o *askOptions) bindCommon(cmd *cobra.Command) {
 	f.StringSliceVarP(&o.attach, "attach", "a", nil, "path to an image or document (repeatable)")
 	f.StringSliceVar(&o.transports, "transport", nil, "telegram | discord (default: config)")
 	f.StringVar(&o.agent, "agent", "", `label shown to the human (default: $HITL_AGENT, else "agent")`)
+	f.StringVar(&o.channel, "channel", "", "messenger | terminal | auto (default: config)")
 }
 
 func newAskCommand(g *globals) *cobra.Command {
@@ -56,7 +58,8 @@ func newAskCommand(g *globals) *cobra.Command {
 		Long: "Post a question to the configured messengers and wait for a reply.\n\n" +
 			"With -o text the answer text is the only thing written to stdout, so\n" +
 			"`answer=$(herdr-hitl ask -t 'Deploy?' -c yes -c no)` works. Diagnostics go\n" +
-			"to stderr. Exit codes: 0 answered, 1 error, 2 usage, 3 timeout, 4 canceled.",
+			"to stderr. Exit codes: 0 answered, 1 error, 2 usage, 3 timeout,\n" +
+			"4 canceled, 5 the human is at the terminal and nothing was sent.",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -81,7 +84,10 @@ func newNotifyCommand(g *globals) *cobra.Command {
 		Use:   "notify",
 		Short: "Send a message that expects no answer",
 		Long: "Post a one-way message to the configured messengers and return\n" +
-			"immediately. Nothing is written to stdout on success.",
+			"immediately. Nothing is written to stdout on success.\n\n" +
+			"Exits 5 without sending anything when the resolved channel is the\n" +
+			"terminal, so a notification cannot reach a phone the operator asked\n" +
+			"it to leave alone.",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -190,6 +196,13 @@ func runAsk(cmd *cobra.Command, g *globals, o *askOptions) error {
 	if err != nil {
 		return err
 	}
+	decision, err := resolveChannel(o.channel, cfg)
+	if err != nil {
+		return err
+	}
+	if err := enforceChannel(cmd, "asking", "ask there instead", decision); err != nil {
+		return err
+	}
 	params, err := o.build(cmd, cfg, true)
 	if err != nil {
 		return err
@@ -268,6 +281,13 @@ func printAnswer(w io.Writer, format string, answer *hitl.Answer) error {
 func runNotify(cmd *cobra.Command, g *globals, o *askOptions) error {
 	cfg, err := loadConfig()
 	if err != nil {
+		return err
+	}
+	decision, err := resolveChannel(o.channel, cfg)
+	if err != nil {
+		return err
+	}
+	if err := enforceChannel(cmd, "notifying", "say it in your own output instead", decision); err != nil {
 		return err
 	}
 	params, err := o.build(cmd, cfg, false)

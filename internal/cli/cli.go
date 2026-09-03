@@ -3,7 +3,7 @@
 // The binary is both the agent-facing client and the resident daemon, so the
 // same command tree covers `ask` (blocking, machine-readable) and `serve`
 // (long-lived). Exit codes are part of the contract an agent scripts against:
-// 0 answered, 1 error, 2 usage, 3 timeout, 4 canceled.
+// 0 answered, 1 error, 2 usage, 3 timeout, 4 canceled, 5 terminal channel.
 package cli
 
 import (
@@ -35,6 +35,10 @@ const (
 	ExitTimeout = 3
 	// ExitCanceled means the question was withdrawn or declined.
 	ExitCanceled = 4
+	// ExitTerminal means nothing was delivered because the resolved channel
+	// is the terminal: the human is at the agent's own interface, so the
+	// agent must ask there. It is not a failure and never an approval.
+	ExitTerminal = 5
 )
 
 // Output formats accepted by -o/--format.
@@ -225,6 +229,9 @@ func newRootCommand(info BuildInfo) (*cobra.Command, *globals) {
 		newDoctorCommand(g),
 		newConfigCommand(g),
 		newInstallCLICommand(g),
+		newChannelCommand(g),
+		newAwayCommand(g),
+		newHereCommand(g),
 		newVersionCommand(g),
 	)
 	return root, g

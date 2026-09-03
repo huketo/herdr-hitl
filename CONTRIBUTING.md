@@ -87,8 +87,8 @@ major one.
 
 **Scopes** — one of:
 
-`cli`, `daemon`, `broker`, `telegram`, `discord`, `config`, `ipc`, `skill`,
-`plugin`, `docs`, `ci`, `deps`
+`cli`, `daemon`, `paths`, `herdrctl`, `channel`, `broker`, `telegram`,
+`discord`, `config`, `ipc`, `skill`, `plugin`, `docs`, `ci`, `deps`
 
 The scope is optional, but if you set one it must be from that list.
 `commitlint.config.mjs` is the source of truth; keep it and this list in sync.

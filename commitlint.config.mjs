@@ -48,6 +48,7 @@ export default {
 				"daemon",
 				"paths",
 				"herdrctl",
+				"channel",
 				"broker",
 				"telegram",
 				"discord",

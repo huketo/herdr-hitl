@@ -16,6 +16,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/huketo/herdr-hitl/internal/channel"
 	"github.com/huketo/herdr-hitl/internal/paths"
 )
 
@@ -58,6 +59,11 @@ type Config struct {
 	Transports []string `toml:"transports"`
 	// Timeout is the default answer deadline. Zero means wait forever.
 	Timeout Duration `toml:"timeout"`
+	// Channel is the routing policy for `ask` and `notify`: "messenger"
+	// always delivers, "terminal" never does, and "auto" delivers only
+	// while the Away marker is set. Empty means "messenger", so an
+	// installation that never sets it keeps delivering questions.
+	Channel string `toml:"channel"`
 
 	Telegram Telegram `toml:"telegram"`
 	Discord  Discord  `toml:"discord"`
@@ -203,6 +209,9 @@ func (c *Config) applyEnv(get func(string) string) {
 	if v := get("HITL_TRANSPORTS"); v != "" {
 		c.Transports = splitList(v)
 	}
+	if v := get("HITL_CHANNEL"); v != "" {
+		c.Channel = v
+	}
 	if v := get("HITL_TIMEOUT"); v != "" {
 		var d Duration
 		if err := d.UnmarshalText([]byte(v)); err == nil {
@@ -275,6 +284,11 @@ func (c *Config) Validate() error {
 		case TransportTelegram, TransportDiscord, "", "all":
 		default:
 			return fmt.Errorf("config: unknown transport %q", name)
+		}
+	}
+	if strings.TrimSpace(c.Channel) != "" {
+		if _, err := channel.ParsePolicy(c.Channel); err != nil {
+			return fmt.Errorf("config: %w", err)
 		}
 	}
 	if c.Telegram.IsEnabled() {

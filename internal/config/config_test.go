@@ -183,6 +183,11 @@ func TestValidateRejectsHalfConfiguredTransports(t *testing.T) {
 			files:   map[string]string{"config.toml": "[daemon]\nlog_level = \"chatty\"\n"},
 			wantErr: "unknown log_level",
 		},
+		{
+			name:    "unknown channel",
+			files:   map[string]string{"config.toml": "channel = \"phone\"\n"},
+			wantErr: `unknown channel "phone"`,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -207,6 +212,29 @@ func TestDisablingATransportWithAToken(t *testing.T) {
 	}
 	if cfg.Telegram.IsEnabled() {
 		t.Error("enabled = false must win over the presence of a token")
+	}
+}
+
+func TestChannelIsReadFromTomlAndOverriddenByTheEnvironment(t *testing.T) {
+	dir := writeConfigDir(t, map[string]string{"config.toml": "channel = \"auto\"\n"})
+
+	cfg, err := config.LoadFrom(dir)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	if cfg.Channel != "auto" {
+		t.Fatalf("Channel = %q, want the TOML value", cfg.Channel)
+	}
+
+	// This is how an unattended launcher declares that nobody is watching a
+	// terminal, so it has to beat a laptop's presence-routed config file.
+	t.Setenv("HITL_CHANNEL", "messenger")
+	cfg, err = config.LoadFrom(dir)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	if cfg.Channel != "messenger" {
+		t.Fatalf("Channel = %q, want the environment to win", cfg.Channel)
 	}
 }
 

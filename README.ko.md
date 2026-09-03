@@ -55,6 +55,33 @@ Discord의 공유 서버는 **자격 증명 역할일 뿐 목적지가 아닙니
 
 **함정 하나: Telegram 채널.** 채널은 방송 전용이라 답장 상자가 없습니다. 버튼은 되지만 글로 쓰는 답은 구조적으로 불가능합니다. `herdr-hitl doctor`가 채널을 감지하면 그 사실을 알려줍니다.
 
+### 사람의 현재 위치에 따라 질문 전달하기
+
+사람이 키보드 앞에 있다면 지금 보고 있는 pane에서 답할 수 있는 결정을 폰으로 다시 알려서는 안 됩니다. 포커스, 유휴 시간, 연결된 클라이언트 같은 정보로는 사람의 현재 위치를 정확히 판단할 수 없으므로, 각 질문은 명시된 상태에 따라 전달 경로를 정합니다.
+
+대화형 환경에서는 다음 설정을 권장합니다.
+
+```toml
+channel = "auto"
+```
+
+`auto`를 사용하면 당신이 자리에 있는 동안에는 질문이 터미널에 남고, Away marker가 설정된 동안에는 메신저로 전달됩니다.
+
+```sh
+herdr-hitl away
+herdr-hitl here
+```
+
+`herdr-hitl away --for 2h`를 실행하면 만료 시간을 설정합니다. `--for`를 생략하면 Away marker를 지울 때까지 유지됩니다. Away marker는 `<state dir>/away`에 있으며, `forever` 또는 RFC 3339 형식의 만료 시각을 담고, `0600` 권한으로 만들어집니다. 잘못된 Away marker는 자리를 비운 것으로 처리하며, 만료된 Away marker는 자리를 비운 것으로 처리하지 않습니다.
+
+스케줄러나 분리 실행된 에이전트처럼 사람이 지켜보지 않는 실행 환경에서는 아무도 보고 있지 않다는 사실을 명시해야 합니다.
+
+```sh
+export HITL_CHANNEL=messenger
+```
+
+각 `ask` 또는 `notify`의 정책은 `--channel messenger|terminal|auto`, `HITL_CHANNEL`, `config.toml`의 `channel`, 기본값인 `messenger` 순서로 결정됩니다. `HITL_CHANNEL`과 `channel`에는 이 세 값만 사용할 수 있으며, 다른 값을 사용하면 설정을 불러올 때 오류가 발생합니다. 결과가 `terminal`이면 Daemon이나 메신저에 아무것도 전달하지 않습니다. 명령은 에이전트가 현재 인터페이스에서 직접 질문해야 한다는 설명을 stderr에 쓰고 종료 코드 `5`로 끝납니다. 에이전트는 이 상태를 승인으로 처리하거나 전달을 재시도해서는 안 됩니다. 한 번의 호출만 재정의하려면 `--channel messenger`를 사용하십시오.
+
 ## 설정
 
 설정 디렉터리에 파일 두 개가 있습니다.
@@ -77,6 +104,8 @@ Discord의 공유 서버는 **자격 증명 역할일 뿐 목적지가 아닙니
 ### `config.toml`
 
 ```toml
+# messenger(기본), terminal, Away marker를 따르는 auto 중에서 전달 경로를 정합니다.
+channel = "auto"
 # --transport 없이 ask 할 때 사용할 Transport.
 transports = ["telegram"]
 # ask의 기본 마감. 0이면 무한정 기다립니다.
@@ -116,6 +145,7 @@ pane_tokens = true        # 대기 상태를 pane 토큰으로 노출합니다
 | `HITL_DISCORD_CHANNEL_ID` | `discord.channel_id` | `DISCORD_CHANNEL_ID` |
 | `HITL_DISCORD_USER_ID` | `discord.user_id` | — |
 | `HITL_TRANSPORTS` | `transports` (쉼표 구분) | — |
+| `HITL_CHANNEL` | `channel` | — |
 | `HITL_TIMEOUT` | `timeout` | — |
 | `HITL_LOG_LEVEL` | `daemon.log_level` | — |
 | `HITL_IDLE_SHUTDOWN` | `daemon.idle_shutdown` | — |
@@ -142,6 +172,7 @@ pane_tokens = true        # 대기 상태를 pane 토큰으로 노출합니다
 | `-a, --attach strings` | 반복 가능. 이미지나 문서 경로 (`.md`, `.html`, `.png`, …). |
 | `--timeout duration` | 마감. 기본은 설정값(`30m`). `0`이면 무한정. |
 | `--transport strings` | `telegram`, `discord`. 기본은 설정값. |
+| `--channel string` | `messenger`, `terminal`, `auto` 중 하나입니다. 이 호출의 전달 정책을 재정의합니다. |
 | `--agent string` | 사람에게 보일 라벨. 기본 `$HITL_AGENT`, 없으면 `agent`. |
 | `--default string` | 마감이 지나면 실패 대신 이 텍스트를 출력합니다. |
 | `-o, --format string` | `text` 또는 `json`. 기본 `text`. |
@@ -158,11 +189,37 @@ ANSWER=$(herdr-hitl ask \
 
 ### `notify` — 답을 기다리지 않는 알림
 
-플래그: `-t/--title`, `-m/--message`, `--message-file`, `-a/--attach`, `--transport`, `--agent`.
+플래그: `-t/--title`, `-m/--message`, `--message-file`, `-a/--attach`, `--transport`, `--channel`, `--agent`.
 
 ```sh
 herdr-hitl notify -t "마이그레이션 완료" -m "42개 테이블, 오류 0건, 6분 12초." -a report.md
 ```
+
+### `channel` — 결정된 전달 경로를 출력합니다
+
+```sh
+herdr-hitl channel
+herdr-hitl channel -o json
+```
+
+텍스트 출력은 정확히 `messenger` 또는 `terminal`만 담습니다. JSON 출력은 `channel`, `policy`, `reason`을 담고, 설정된 경우에는 `away_until`도 담습니다. `reason`은 `flag`, `config`, `away marker`, `no away marker`, `away marker expired`, `default` 중 하나입니다.
+
+### `away` — 아무도 터미널을 보고 있지 않다고 선언합니다
+
+```sh
+herdr-hitl away
+herdr-hitl away --for 2h
+```
+
+`--for`를 생략하면 marker를 지울 때까지 유지됩니다. 이 명령은 기록한 내용과 결정된 전달 경로를 출력하므로, `channel = "messenger"`에서 marker가 아무런 영향을 주지 않는다는 사실도 즉시 확인할 수 있습니다.
+
+### `here` — 사람이 터미널을 보고 있다고 선언합니다
+
+```sh
+herdr-hitl here
+```
+
+Away marker를 지우고 결정된 전달 경로를 출력합니다.
 
 ### `pending` — 답을 기다리는 질문 목록
 
@@ -206,6 +263,8 @@ herdr-hitl daemon stop
 herdr-hitl doctor -o json
 ```
 
+`channel` 검사는 결정된 경로가 메시지를 전달하면 `OK`, 전달하지 않으면 `WARN`을 표시합니다. 검사 결과에는 결정 이유와 `herdr-hitl away`를 실행하라는 안내가 포함됩니다.
+
 ### `config` — 확인과 생성
 
 ```sh
@@ -235,6 +294,7 @@ herdr-hitl version -o json
 | `2` | 사용법 오류 — 없는 플래그, 빠진 필수 플래그, 잘못된 값. |
 | `3` | 시간 초과 — 마감까지 답이 없었습니다. `--default`가 이것을 `0`으로 바꿉니다. |
 | `4` | 취소 또는 거절 — 사람이 물리쳤거나 Daemon이 취소 지시를 받았습니다. |
+| `5` | 터미널 경로 — 아무것도 전송하지 않았습니다. 현재 인터페이스에서 직접 질문해야 하며, 이 결과는 절대 승인이 아닙니다. |
 
 ## 메신저 설정
 
