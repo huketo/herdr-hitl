@@ -338,11 +338,12 @@ func TestAFKRecoveryToHereAndAway(t *testing.T) {
 	}
 
 	// 2. here clears AFK -> under default policy, ask delivers
-	code, stdout, stderr := h.run(t, "here")
+	code, _, stderr := h.run(t, "here")
 	if code != ExitOK {
 		t.Fatalf("here exit code = %d (stderr: %s)", code, stderr)
 	}
-	if code, stdout, _ = h.run(t, "ask", "-t", "Deploy?", "-c", "yes"); code != ExitOK {
+	code, stdout, _ := h.run(t, "ask", "-t", "Deploy?", "-c", "yes")
+	if code != ExitOK {
 		t.Fatalf("ask after here failed: code = %d", code)
 	}
 	if stdout != "yes\n" {
@@ -358,7 +359,7 @@ func TestAFKRecoveryToHereAndAway(t *testing.T) {
 	}
 
 	// 4. away replaces AFK -> ask delivers
-	code, stdout, stderr = h.run(t, "away")
+	code, _, stderr = h.run(t, "away")
 	if code != ExitOK {
 		t.Fatalf("away exit code = %d (stderr: %s)", code, stderr)
 	}

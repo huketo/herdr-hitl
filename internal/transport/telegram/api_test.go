@@ -429,19 +429,17 @@ func TestFreeTextReplyAnswersTheRequest(t *testing.T) {
 	if err := tr.Post(context.Background(), req); err != nil {
 		t.Fatalf("Post: %v", err)
 	}
-	tr.mu.Lock()
-	posted := tr.posted[req.ID]
-	tr.mu.Unlock()
-	if posted == nil {
-		t.Fatal("Post did not track the question")
-	}
+	api.mustLast(t, "sendMessage")
+	api.mu.Lock()
+	messageID := api.nextMsgID
+	api.mu.Unlock()
 
 	tr.handleMessage(context.Background(), &models.Message{
 		ID:             500,
-		Chat:           models.Chat{ID: posted.chatID},
+		Chat:           models.Chat{ID: -100777},
 		From:           &models.User{ID: 42, Username: "huke"},
 		Text:           "  use the staging cluster  ",
-		ReplyToMessage: &models.Message{ID: posted.messageID},
+		ReplyToMessage: &models.Message{ID: messageID},
 	})
 
 	resolver.mu.Lock()
