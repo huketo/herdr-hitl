@@ -413,6 +413,24 @@ func TestNotify(t *testing.T) {
 	if h.handler.notified.AllowFreeText || len(h.handler.notified.Choices) != 0 {
 		t.Fatalf("notification = %+v, want no reply surface", h.handler.notified)
 	}
+	if h.handler.notified.Timeout != nil {
+		t.Fatalf("notification overrides the daemon's retention deadline: %s", time.Duration(*h.handler.notified.Timeout))
+	}
+}
+
+func TestAskExplicitZeroTimeout(t *testing.T) {
+	h := newHarness(t)
+	t.Setenv("HITL_TIMEOUT", "7m")
+	h.handler.answer = &hitl.Answer{RequestID: "zero-timeout", Status: hitl.StatusAnswered, Text: "yes"}
+
+	code, _, stderr := h.run(t, "ask", "-t", "Wait", "--timeout", "0")
+	if code != ExitOK {
+		t.Fatalf("exit code = %d, want %d (%s)", code, ExitOK, stderr)
+	}
+	timeout := h.handler.lastAsk(t).Timeout
+	if timeout == nil || time.Duration(*timeout) != 0 {
+		t.Fatalf("explicit zero did not reach the daemon: %v", timeout)
+	}
 }
 
 func TestPendingTable(t *testing.T) {

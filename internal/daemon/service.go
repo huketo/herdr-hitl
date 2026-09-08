@@ -230,9 +230,9 @@ func (s *service) request(p *ipc.AskParams) (*hitl.Request, error) {
 }
 
 // trackPane publishes the `$hitl` pane token for the lifetime of one ask. The
-// set and the clear share a goroutine so they cannot race, and the token also
-// carries a TTL: if this daemon is killed, Herdr expires the token instead of
-// leaving a pane marked as blocked forever.
+// set and the clear share a goroutine so they cannot race. Finite asks carry a
+// TTL that survives daemon failure; an explicit infinite ask has no expiry and
+// can leave its pane marked blocked if the daemon is killed before clearing it.
 func (s *service) trackPane(req *hitl.Request, waiting <-chan struct{}) {
 	if !s.cfg.Herdr.PaneTokensEnabled() || req.Origin.PaneID == "" || !s.herdr.Available() {
 		return

@@ -128,25 +128,24 @@ func (o *askOptions) build(cmd *cobra.Command, cfg *config.Config, wantAnswer bo
 	}
 	free := o.free
 	if !wantAnswer {
-		// A notification has no reply surface at all.
+		// A notification has no reply surface; its retention deadline stays daemon-owned.
 		free = false
 		choices = nil
-		timeout = 0
 	}
 
-	wireTimeout := ipc.Duration(timeout)
 	params := &ipc.AskParams{
 		Title:         strings.TrimSpace(o.title),
 		Body:          body,
 		Choices:       choices,
 		AllowFreeText: free,
 		Attachments:   attachments,
-		Timeout:       &wireTimeout,
 		Transports:    transports,
 		Origin:        detectOrigin(o.agent),
 	}
 
 	if wantAnswer {
+		wireTimeout := ipc.Duration(timeout)
+		params.Timeout = &wireTimeout
 		// Validate against the domain rules before paying for a daemon
 		// round trip; the error text is identical either way but arrives
 		// instantly and without posting anything.
