@@ -239,6 +239,7 @@ func isAFKText(text string) bool {
 		strings.HasPrefix(lower, "afk ") ||
 		strings.HasPrefix(lower, "afk\t") ||
 		strings.HasPrefix(lower, "afk\n") ||
+		strings.HasPrefix(lower, "afk\r") ||
 		strings.HasPrefix(lower, "afk:")
 }
 

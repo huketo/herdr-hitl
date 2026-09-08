@@ -487,6 +487,14 @@ func TestAFKMalformedVariations(t *testing.T) {
 		wantAway      bool
 	}{
 		{
+			name:          "CRLF AFK with invalid time",
+			content:       "afk\r\nnot-a-date\r\n",
+			wantSet:       true,
+			wantAFK:       true,
+			wantMalformed: true,
+			wantActiveAFK: true,
+		},
+		{
 			name:          "afk with invalid time",
 			content:       "afk tomorrow morning\n",
 			wantSet:       true,
