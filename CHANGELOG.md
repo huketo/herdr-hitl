@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.0](https://github.com/huketo/herdr-hitl/compare/v0.2.1...v0.3.0) (2026-09-08)
+
+
+### Features
+
+* **channel:** support afk presence mode and atomic marker storage ([170325f](https://github.com/huketo/herdr-hitl/commit/170325f9932ea0ef72c8607dac4c03f8cba72d63))
+* **cli:** add afk command and refuse delivery with exit 6 ([ea716c5](https://github.com/huketo/herdr-hitl/commit/ea716c582ec33bf6dc2ffe632365f1f667eac8d7))
+
+
+### Bug fixes
+
+* **afk:** preserve expiry precision and complete CLI integration ([e57be37](https://github.com/huketo/herdr-hitl/commit/e57be37a29e331b97997c729bc3323cecc0b8f2c))
+* **afk:** retain unavailable mode for CRLF markers ([bd251b3](https://github.com/huketo/herdr-hitl/commit/bd251b34f95cdcf0b817a3331ae9d3080edccb03))
+
+
+### Documentation
+
+* **skill:** document afk decision policy and exit code 6 ([e5d14cc](https://github.com/huketo/herdr-hitl/commit/e5d14cc5803bf72f21cabd1c1f137218ea6b6f1b))
+
 ## [0.2.1](https://github.com/huketo/herdr-hitl/compare/v0.2.0...v0.2.1) (2026-09-08)
 
 
