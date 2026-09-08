@@ -56,7 +56,7 @@ type AskParams struct {
 	Choices       []hitl.Choice `json:"choices,omitempty"`
 	AllowFreeText bool          `json:"allow_free_text"`
 	Attachments   []string      `json:"attachments,omitempty"`
-	Timeout       Duration      `json:"timeout,omitempty"`
+	Timeout       *Duration     `json:"timeout,omitempty"` // nil inherits config; zero waits indefinitely.
 	Transports    []string      `json:"transports,omitempty"`
 	Origin        hitl.Origin   `json:"origin,omitempty"`
 }
