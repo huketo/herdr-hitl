@@ -35,6 +35,9 @@ const (
 	// Auto defers to the Away marker. It is an input value only: Resolve
 	// never returns it.
 	Auto Channel = "auto"
+	// AFK means the human declared unavailable mode. Questions and
+	// notifications are refused before reaching the daemon or network.
+	AFK Channel = "afk"
 )
 
 // Reason names what settled the decision. It is reported to the human and in
@@ -57,6 +60,8 @@ const (
 	ReasonStaleAway Reason = "away marker expired"
 	// ReasonDefault: nothing said anything, so questions are delivered.
 	ReasonDefault Reason = "default"
+	// ReasonAFK: the human declared unavailable mode (AFK).
+	ReasonAFK Reason = "afk marker"
 )
 
 // Decision is the resolved routing outcome and the reason for it.
@@ -109,10 +114,25 @@ func ParsePolicy(v string) (Policy, error) {
 type Marker struct {
 	// Set reports that the marker file exists.
 	Set bool
+	// AFK reports whether the marker represents an AFK declaration.
+	AFK bool
 	// Until is when the marker lapses. Zero means it never does.
 	Until time.Time
 	// Malformed records that the file existed but did not parse.
 	Malformed bool
+}
+
+// ActiveAFK reports whether the marker is an active AFK declaration at now.
+//
+// A malformed AFK expiry must not downgrade to message delivery; it remains active.
+func (m Marker) ActiveAFK(now time.Time) bool {
+	if !m.Set || !m.AFK {
+		return false
+	}
+	if m.Malformed || m.Until.IsZero() {
+		return true
+	}
+	return now.Before(m.Until)
 }
 
 // Away reports whether the marker is in force at now.
@@ -120,8 +140,11 @@ type Marker struct {
 // A malformed marker counts as away. The two failure modes are not
 // symmetrical: routing to the terminal when nobody is there strands the run
 // until the human comes back, while routing to the messenger when they are
-// present costs one unwanted notification.
+// present costs one unwanted notification. An AFK marker is not an Away marker.
 func (m Marker) Away(now time.Time) bool {
+	if m.AFK {
+		return false
+	}
 	switch {
 	case !m.Set:
 		return false
@@ -136,6 +159,7 @@ func (m Marker) Away(now time.Time) bool {
 
 // Resolve picks the channel. explicit is the --channel value ("" when the flag
 // was absent), configured is the config/environment value ("" when unset).
+// Active AFK overrides explicit and configured channels, resolving to afk.
 func Resolve(explicit, configured string, m Marker, now time.Time) (Decision, error) {
 	policy := PolicyMessenger
 	reason := ReasonDefault
@@ -152,6 +176,15 @@ func Resolve(explicit, configured string, m Marker, now time.Time) (Decision, er
 			return Decision{}, err
 		}
 		policy, reason = p, ReasonConfig
+	}
+
+	if m.ActiveAFK(now) {
+		return Decision{
+			Channel:   AFK,
+			Policy:    policy,
+			Reason:    ReasonAFK,
+			AwayUntil: m.Until,
+		}, nil
 	}
 
 	if policy != PolicyAuto {
@@ -175,7 +208,7 @@ func Resolve(explicit, configured string, m Marker, now time.Time) (Decision, er
 // file that looks like a bug.
 const forever = "forever"
 
-// ReadMarker loads the Away marker. An absent file is the zero Marker and not
+// ReadMarker loads the Away or AFK marker. An absent file is the zero Marker and not
 // an error: "the human is here" is the normal state.
 func ReadMarker(path string) (Marker, error) {
 	data, err := os.ReadFile(path) //nolint:gosec // path is derived from the state dir
@@ -187,6 +220,9 @@ func ReadMarker(path string) (Marker, error) {
 	}
 
 	text := strings.TrimSpace(string(data))
+	if isAFKText(text) {
+		return parseAFKMarker(text), nil
+	}
 	if text == "" || strings.EqualFold(text, forever) {
 		return Marker{Set: true}, nil
 	}
@@ -197,6 +233,28 @@ func ReadMarker(path string) (Marker, error) {
 	return Marker{Set: true, Malformed: true}, nil
 }
 
+func isAFKText(text string) bool {
+	lower := strings.ToLower(text)
+	return lower == "afk" ||
+		strings.HasPrefix(lower, "afk ") ||
+		strings.HasPrefix(lower, "afk\t") ||
+		strings.HasPrefix(lower, "afk\n") ||
+		strings.HasPrefix(lower, "afk:")
+}
+
+func parseAFKMarker(text string) Marker {
+	rem := strings.TrimSpace(text[3:])
+	rem = strings.TrimPrefix(rem, ":")
+	rem = strings.TrimSpace(rem)
+	if rem == "" || strings.EqualFold(rem, forever) {
+		return Marker{Set: true, AFK: true}
+	}
+	if until, ok := parseExpiry(rem); ok {
+		return Marker{Set: true, AFK: true, Until: until}
+	}
+	return Marker{Set: true, AFK: true, Malformed: true}
+}
+
 // parseExpiry reads the timestamp form of the marker file.
 func parseExpiry(text string) (time.Time, bool) {
 	until, err := time.Parse(time.RFC3339, text)
@@ -205,16 +263,52 @@ func parseExpiry(text string) (time.Time, bool) {
 
 // WriteMarker sets the Away marker. A zero until means it never lapses.
 func WriteMarker(path string, until time.Time) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return fmt.Errorf("create %s: %w", filepath.Dir(path), err)
-	}
 	body := forever
 	if !until.IsZero() {
 		body = until.Format(time.RFC3339)
 	}
-	if err := os.WriteFile(path, []byte(body+"\n"), 0o600); err != nil {
-		return fmt.Errorf("write %s: %w", path, err)
+	return atomicWriteMarker(path, []byte(body+"\n"))
+}
+
+// WriteAFKMarker sets the AFK marker. A zero until means it never lapses.
+func WriteAFKMarker(path string, until time.Time) error {
+	body := "afk"
+	if !until.IsZero() {
+		body = "afk " + until.Format(time.RFC3339)
 	}
+	return atomicWriteMarker(path, []byte(body+"\n"))
+}
+
+func atomicWriteMarker(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("create %s: %w", dir, err)
+	}
+	tmp, err := os.CreateTemp(dir, ".away-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp marker in %s: %w", dir, err)
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		if tmpPath != "" {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod %s: %w", tmpPath, err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write %s: %w", tmpPath, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", tmpPath, err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("replace %s: %w", path, err)
+	}
+	tmpPath = ""
 	return nil
 }
 
