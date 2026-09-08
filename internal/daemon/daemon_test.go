@@ -154,13 +154,18 @@ func runningDaemon(t *testing.T, cfg *config.Config, endpoint string, factory Tr
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
+	transportsReady := make(chan struct{})
 	go func() {
 		done <- Run(ctx, Options{
-			Config:        cfg,
-			Endpoint:      endpoint,
-			Version:       "test",
-			Log:           discardLogger(),
-			NewTransports: factory,
+			Config:   cfg,
+			Endpoint: endpoint,
+			Version:  "test",
+			Log:      discardLogger(),
+			NewTransports: func(cfg *config.Config, resolver hitl.Resolver, log *slog.Logger) ([]transport.Transport, error) {
+				transports, err := factory(cfg, resolver, log)
+				close(transportsReady)
+				return transports, err
+			},
 		})
 	}()
 
@@ -168,6 +173,8 @@ func runningDaemon(t *testing.T, cfg *config.Config, endpoint string, factory Tr
 		cancel()
 		t.Fatalf("daemon never came up: %v (run: %v)", err, <-done)
 	}
+	// Socket readiness is not a Go happens-before edge for factory captures.
+	<-transportsReady
 
 	var once sync.Once
 	return func() {
@@ -559,8 +566,10 @@ func TestIdleShutdownWaitsForAPendingQuestion(t *testing.T) {
 	cfg.Daemon.IdleShutdown = config.Duration(150 * time.Millisecond)
 
 	var fake *fakeTransport
+	transportsReady := make(chan struct{})
 	factory := func(_ *config.Config, resolver hitl.Resolver, _ *slog.Logger) ([]transport.Transport, error) {
 		fake = newFakeTransport("fake", resolver)
+		close(transportsReady)
 		return []transport.Transport{fake}, nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -572,6 +581,7 @@ func TestIdleShutdownWaitsForAPendingQuestion(t *testing.T) {
 	if err := waitForDaemon(ctx, endpoint, 5*time.Second, LogSize()); err != nil {
 		t.Fatalf("daemon never came up: %v", err)
 	}
+	<-transportsReady
 
 	pending := askAsync(ctx, endpoint, &ipc.AskParams{Title: "Wait for me", AllowFreeText: true})
 	req := fake.nextPost(t)
