@@ -44,8 +44,29 @@ Before every question, resolve the channel with `herdr-hitl channel`:
 
 1. `messenger` — deliver it with `herdr-hitl ask`.
 2. `terminal` — the human is at your own interface. Ask there and do not call `herdr-hitl ask`.
+3. `afk` — the human declared unavailable mode. Do not call `herdr-hitl ask` or `herdr-hitl notify`. Apply the AFK decision routing policy below: decide autonomously, run quorum, or defer dependent work.
 
-The human toggles their presence with `herdr-hitl away` and `herdr-hitl here`. These are human commands; never run them. The `ask` examples below apply only to the `messenger` branch.
+The human toggles presence with `herdr-hitl afk`, `herdr-hitl away`, and `herdr-hitl here`. These are human controls; agents must never run them or toggle presence. The `ask` examples below apply only to the `messenger` branch.
+
+## Decision routing when AFK
+
+AFK is human-declared unavailable mode. When the human is AFK, questions and notifications are refused before the daemon or network with exit 6.
+
+**AFK authorizes no actions.** It never constitutes approval, and it never invents synthetic approval. Explicitly preauthorized effects remain authorized.
+
+When AFK is active:
+- **No human questions or notifications**: Do not attempt to page or notify the human.
+- **No busy retry**: Do not poll, loop, or retry `ask` or `notify` while AFK.
+- **No presence toggling**: Agents must never run `afk`, `away`, or `here`.
+- **CLI does not run models**: Autonomous and quorum reasoning is performed by the agent and harness, not by `herdr-hitl`.
+
+Route decisions according to this table:
+
+| Decision class | Applicable situations | Required action |
+| --- | --- | --- |
+| **Autonomous** | In-scope, reversible, evidence-resolvable matters (e.g. implementation details, test design, following existing conventions, bug fixes with clear evidence). | Decide autonomously using codebase evidence, tests, and documentation. Proceed with execution. |
+| **Quorum** | Material technical alternatives with costly reversal and unresolved evidence (e.g. significant architectural fork where evidence is split). | Seek evidence-backed consensus via quorum across independent models (`herdr-quorum`). If quorum is unavailable or fails, choose the evidence-supported safe reversible alternative; otherwise defer. |
+| **Defer** | Human-only decisions: unapproved destructive or publication actions (force-push, drop tables, deploy, delete branch, rewrite history), missing credentials/secrets only the human has, conflicting human requirements, out-of-scope work. | **Defer only dependent work.** Continue independent authorized work. Leave the workspace clean and record the blocked work and required human decision clearly. |
 
 ## Command surface
 
@@ -67,6 +88,9 @@ herdr-hitl ask [flags]
   -o, --format string       text | json (default text)
 herdr-hitl notify [-t|-m|--message-file|-a|--transport|--agent|--channel]
 herdr-hitl channel [-o text|json]
+herdr-hitl afk [--for duration]
+herdr-hitl away [--for duration]
+herdr-hitl here
 herdr-hitl pending [-o text|json]
 herdr-hitl answer <request-id> [--choice ID] [--text TEXT]
 herdr-hitl cancel <request-id> [--reason TEXT]
@@ -154,6 +178,7 @@ herdr-hitl notify -t "Migration finished" \
 | `3` | Timeout | Nobody answered. Take the safe path or stop; do not proceed as if approved. |
 | `4` | Canceled or declined | The human said no. Stop that line of work. |
 | `5` | Terminal channel | Nothing was sent. Ask in your own interface; do not retry. |
+| `6` | AFK channel | Human declared unavailable mode. Nothing was sent; questions and notifications refused. Do not retry; follow autonomous/quorum/defer policy. Defer dependent work and proceed with independent authorized work. |
 
 ```sh
 set +e
@@ -165,11 +190,12 @@ case $CODE in
   3) echo "no answer in 30m — skipping the deploy and reporting instead" ;;
   4) echo "declined — stopping" ;;
   5) echo "nothing sent — ask in your own interface; do not retry" ;;
+  6) echo "human is AFK — do not retry; defer dependent work and continue independent work" ;;
   *) echo "hitl failed ($CODE)" >&2; exit "$CODE" ;;
 esac
 ```
 
-Never treat `3`, `4`, or `5` as approval. Exit `5` is not a failure to retry; it means ask in your own interface. If a timeout has a safe default, encode it with `--default` so the command exits `0` and prints that value.
+Never treat `3`, `4`, `5`, or `6` as approval. AFK authorizes no actions and provides no synthetic approval. Exit `5` is not a failure to retry; it means ask in your own interface. Exit `6` means the human is unavailable; do not retry to page the human. Follow the AFK decision table to decide autonomously, run quorum, or defer only dependent work while continuing independent authorized work. If a timeout has a safe default, encode it with `--default` so the command exits `0` and prints that value.
 
 ## Writing a good question
 

@@ -74,6 +74,15 @@ herdr-hitl here
 
 `herdr-hitl away --for 2h`를 실행하면 만료 시간을 설정합니다. `--for`를 생략하면 Away marker를 지울 때까지 유지됩니다. Away marker는 `<state dir>/away`에 있으며, `forever` 또는 RFC 3339 형식의 만료 시각을 담고, `0600` 권한으로 만들어집니다. 잘못된 Away marker는 자리를 비운 것으로 처리하며, 만료된 Away marker는 자리를 비운 것으로 처리하지 않습니다.
 
+자리를 비우고 응답할 수 없는 상태(AFK)를 선언하려면 다음 명령을 실행합니다.
+
+```sh
+herdr-hitl afk
+herdr-hitl afk --for 2h
+```
+
+활성 상태인 AFK는 명시적으로 지정하거나 설정 파일에 지정한 채널보다 우선하여 적용되며, 전달 경로를 `afk`로 결정합니다. 이 상태에서는 `ask`와 `notify`가 데몬이나 네트워크에 도달하기 전에 종료 코드 6을 반환하며 거절되고, 표준 출력에 어떠한 답변도 출력하지 않으며 `--default`에 의한 대체 승인도 허용하지 않습니다. `herdr-hitl here`는 이 표식을 해제하고, `herdr-hitl away`는 이를 일반 부재 표식으로 대체합니다. 만료된 AFK는 기존의 라우팅 규칙으로 복귀하며, 만료 시각 형식이 잘못된 AFK 표식은 메시지 전달로 강등되지 않고 부재 상태를 유지합니다. CLI는 모델을 직접 호출하지 않으며, AFK 상태는 어떠한 조치도 승인하지 않습니다.
+
 스케줄러나 분리 실행된 에이전트처럼 사람이 지켜보지 않는 실행 환경에서는 아무도 보고 있지 않다는 사실을 명시해야 합니다.
 
 ```sh
@@ -202,7 +211,7 @@ herdr-hitl channel
 herdr-hitl channel -o json
 ```
 
-텍스트 출력은 정확히 `messenger` 또는 `terminal`만 담습니다. JSON 출력은 `channel`, `policy`, `reason`을 담고, 설정된 경우에는 `away_until`도 담습니다. `reason`은 `flag`, `config`, `away marker`, `no away marker`, `away marker expired`, `default` 중 하나입니다.
+텍스트 출력은 `messenger`, `terminal`, `afk` 중 하나입니다. JSON 출력은 `channel`, `policy`, `reason`을 담고, 설정된 경우에는 `away_until`도 담습니다. `reason`은 `flag`, `config`, `away marker`, `no away marker`, `away marker expired`, `afk marker`, `default` 중 하나입니다.
 
 ### `away` — 아무도 터미널을 보고 있지 않다고 선언합니다
 
@@ -213,13 +222,22 @@ herdr-hitl away --for 2h
 
 `--for`를 생략하면 marker를 지울 때까지 유지됩니다. 이 명령은 기록한 내용과 결정된 전달 경로를 출력하므로, `channel = "messenger"`에서 marker가 아무런 영향을 주지 않는다는 사실도 즉시 확인할 수 있습니다.
 
+### `afk` — 자리를 비우고 응답할 수 없는 상태(AFK)를 선언합니다
+
+```sh
+herdr-hitl afk
+herdr-hitl afk --for 2h
+```
+
+사람이 응답할 수 없는 상태임을 선언합니다. 활성 상태인 AFK는 명시적 또는 구성된 채널 설정을 재정의하여 `afk`로 결정됩니다. `ask`와 `notify`는 데몬이나 네트워크에 도달하기 전에 종료 코드 6을 반환하며 거절되고, 표준 출력에 답을 쓰지 않으며 `--default`에 의한 승인도 허용하지 않습니다. `herdr-hitl here`는 이를 해제하고, `herdr-hitl away`는 이를 대체합니다.
+
 ### `here` — 사람이 터미널을 보고 있다고 선언합니다
 
 ```sh
 herdr-hitl here
 ```
 
-Away marker를 지우고 결정된 전달 경로를 출력합니다.
+Away 또는 AFK marker를 지우고 결정된 전달 경로를 출력합니다.
 
 ### `pending` — 답을 기다리는 질문 목록
 
@@ -263,7 +281,7 @@ herdr-hitl daemon stop
 herdr-hitl doctor -o json
 ```
 
-`channel` 검사는 결정된 경로가 메시지를 전달하면 `OK`, 전달하지 않으면 `WARN`을 표시합니다. 검사 결과에는 결정 이유와 `herdr-hitl away`를 실행하라는 안내가 포함됩니다.
+`channel` 검사는 결정된 경로가 메시지를 전달하면 `OK`를 표시하고, 전달하지 않으면 `WARN`을 표시합니다(터미널은 종료 코드 5로 끝나며, AFK는 종료 코드 6으로 끝납니다). 검사 결과에는 경로가 결정된 이유와 상태를 전환하는 안내가 함께 포함됩니다.
 
 ### `config` — 확인과 생성
 
@@ -295,6 +313,7 @@ herdr-hitl version -o json
 | `3` | 시간 초과 — 마감까지 답이 없었습니다. `--default`가 이것을 `0`으로 바꿉니다. |
 | `4` | 취소 또는 거절 — 사람이 물리쳤거나 Daemon이 취소 지시를 받았습니다. |
 | `5` | 터미널 경로 — 아무것도 전송하지 않았습니다. 현재 인터페이스에서 직접 질문해야 하며, 이 결과는 절대 승인이 아닙니다. |
+| `6` | AFK 경로 — 사람이 부재(AFK) 상태를 선언했습니다. 질문과 알림은 데몬이나 네트워크에 도달하기 전에 즉시 거절되며, 이는 절대 승인을 의미하지 않습니다. |
 
 ## 메신저 설정
 

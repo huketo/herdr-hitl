@@ -64,3 +64,15 @@ Exit code `5` extends the CLI contract alongside `0` answered, `1` error, `2` us
 **Keep routing every Question to a messenger.** Rejected: it preserves delivery but sends unnecessary notifications whenever the human is already watching the agent.
 
 **Default to `auto`.** Rejected: an upgrade with no Away marker would silently stop messenger delivery and return exit `5`. The feature must not change existing installations until the operator chooses a new Policy.
+
+## Amendment — AFK presence mode and exit code 6
+
+Accepted — 2026-09-08.
+
+The human may declare unavailable mode via `herdr-hitl afk [--for DURATION]`. Active AFK overrides explicit and configured channels, resolving to `afk`. Both `ask` and `notify` refuse with exit code `6` before contacting the Daemon or network, writing nothing to stdout and granting no `--default` approval.
+
+- Active AFK uses the existing presence storage (`away` file) via atomic replacement, extending the format rather than introducing competing state.
+- `herdr-hitl here` clears it; `herdr-hitl away` replaces it.
+- Expired AFK returns to existing routing.
+- A malformed AFK expiry remains active AFK and does not downgrade to message delivery.
+- Exit code `6` extends the CLI contract: "the human declared unavailable mode; questions and notifications are refused before the daemon/network." It is never an Answer, an approval, or permission to proceed with unapproved actions.

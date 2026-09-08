@@ -68,6 +68,15 @@ herdr-hitl here
 
 `herdr-hitl away --for 2h` sets an expiry; without `--for`, the marker remains until you clear it. The marker is `<state dir>/away`, contains `forever` or an RFC 3339 expiry, and is created with mode `0600`. A malformed marker counts as away; an expired marker does not.
 
+To declare that you are unavailable (AFK):
+
+```sh
+herdr-hitl afk
+herdr-hitl afk --for 2h
+```
+
+Active AFK overrides explicit and configured channels, resolving to `afk`. Both `ask` and `notify` refuse before daemon or network with exit 6, writing nothing to stdout and granting no `--default` approval. `herdr-hitl here` clears it; `herdr-hitl away` replaces it. Expired AFK returns to existing routing, and malformed AFK expiry does not downgrade to message delivery. The CLI does not run models, and AFK authorizes no actions.
+
 An unattended launcher, such as a scheduler or a detached agent run, should declare that nobody is watching:
 
 ```sh
@@ -196,7 +205,7 @@ herdr-hitl channel
 herdr-hitl channel -o json
 ```
 
-Text output is exactly `messenger` or `terminal`. JSON output contains `channel`, `policy`, `reason`, and, when set, `away_until`. The reason is `flag`, `config`, `away marker`, `no away marker`, `away marker expired`, or `default`.
+Text output is `messenger`, `terminal`, or `afk`. JSON output contains `channel`, `policy`, `reason`, and, when set, `away_until`. The reason is `flag`, `config`, `away marker`, `no away marker`, `away marker expired`, `afk marker`, or `default`.
 
 ### `away` — declare that nobody is watching the terminal
 
@@ -207,13 +216,22 @@ herdr-hitl away --for 2h
 
 Without `--for`, the marker remains until cleared. The command prints what it wrote and the resolved channel, so a marker that does not affect `channel = "messenger"` is visible immediately.
 
+### `afk` — declare unavailable mode
+
+```sh
+herdr-hitl afk
+herdr-hitl afk --for 2h
+```
+
+Declares that the human is unavailable. Active AFK overrides explicit and configured channels, resolving to `afk`. `ask` and `notify` refuse before the daemon or network with exit 6, writing no answer to stdout and granting no `--default` approval. `herdr-hitl here` clears it; `herdr-hitl away` replaces it.
+
 ### `here` — declare that a human is watching the terminal
 
 ```sh
 herdr-hitl here
 ```
 
-Clears the Away marker and prints the resolved channel.
+Clears the Away or AFK marker and prints the resolved channel.
 
 ### `pending` — list questions currently awaiting an answer
 
@@ -259,7 +277,7 @@ herdr-hitl daemon stop
 herdr-hitl doctor -o json
 ```
 
-The `channel` check is `OK` when the resolved route delivers and `WARN` when it does not. It includes the reason and a hint to run `herdr-hitl away`.
+The `channel` check is `OK` when the resolved route delivers and `WARN` when it does not (terminal exits 5, AFK exits 6). It includes the reason and a hint to switch presence.
 
 ### `config` — inspect and scaffold
 
@@ -291,6 +309,7 @@ herdr-hitl version -o json
 | `3` | Timeout — the deadline passed with no answer. `--default` converts this to `0`. |
 | `4` | Canceled or declined — the human dismissed it, or the daemon was told to cancel. |
 | `5` | Terminal channel — nothing was sent. Ask in the current interface; this is never approval. |
+| `6` | AFK channel — human declared unavailable mode; questions and notifications are refused before daemon or network. Never approval. |
 
 ## Messenger setup
 
