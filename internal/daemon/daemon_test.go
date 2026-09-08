@@ -339,10 +339,11 @@ func TestAskTimesOut(t *testing.T) {
 	stop := runningDaemon(t, config.Default(), endpoint, factory)
 	defer stop()
 
+	timeout := ipc.Duration(80 * time.Millisecond)
 	res := waitAsk(t, askAsync(context.Background(), endpoint, &ipc.AskParams{
 		Title:         "Quick!",
 		AllowFreeText: true,
-		Timeout:       ipc.Duration(80 * time.Millisecond),
+		Timeout:       &timeout,
 	}))
 	if res.err != nil {
 		t.Fatalf("ask: %v", res.err)

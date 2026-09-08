@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -82,11 +83,12 @@ func TestAskDrivesHerdrCallbacks(t *testing.T) {
 		err error
 	}
 	out := make(chan result, 1)
+	timeout := ipc.Duration(time.Minute)
 	go func() {
 		ans, err := svc.Ask(context.Background(), &ipc.AskParams{
 			Title:   "Deploy?",
 			Choices: []hitl.Choice{{ID: "yes", Label: "Ship it"}},
-			Timeout: ipc.Duration(time.Minute),
+			Timeout: &timeout,
 			Origin:  hitl.Origin{Agent: "claude", PaneID: "pane-7"},
 		})
 		out <- result{ans: ans, err: err}
@@ -176,6 +178,7 @@ func TestRequestAppliesConfigDefaults(t *testing.T) {
 	cfg.Telegram.BotToken = "t"
 	cfg.Telegram.ChatID = "1"
 
+	explicitTimeout := ipc.Duration(90 * time.Second)
 	tests := []struct {
 		name           string
 		params         *ipc.AskParams
@@ -193,18 +196,36 @@ func TestRequestAppliesConfigDefaults(t *testing.T) {
 			params: &ipc.AskParams{
 				Title:         "q",
 				AllowFreeText: true,
-				Timeout:       ipc.Duration(90 * time.Second),
+				Timeout:       &explicitTimeout,
 				Transports:    []string{config.TransportDiscord},
 			},
 			wantTimeout:    90 * time.Second,
 			wantTransports: []string{config.TransportDiscord},
+		},
+		{
+			name: "explicit zero has no deadline",
+			params: &ipc.AskParams{
+				Title:         "q",
+				AllowFreeText: true,
+				Timeout:       new(ipc.Duration),
+			},
+			wantTimeout:    0,
+			wantTransports: []string{config.TransportTelegram},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			req, err := testService(t, cfg).request(tt.params)
+			encoded, err := json.Marshal(tt.params)
+			if err != nil {
+				t.Fatalf("encode request: %v", err)
+			}
+			var decoded ipc.AskParams
+			if err := json.Unmarshal(encoded, &decoded); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			req, err := testService(t, cfg).request(&decoded)
 			if err != nil {
 				t.Fatalf("request: %v", err)
 			}
