@@ -44,6 +44,12 @@ func enforceChannel(cmd *cobra.Command, verb, remedy string, d channel.Decision)
 		return nil
 	}
 	w := cmd.ErrOrStderr()
+	if d.Channel == channel.AFK {
+		_, _ = fmt.Fprintf(w, "herdr-hitl: not %s: %s\n", verb, describe(d))
+		_, _ = fmt.Fprintln(w, "the human declared AFK (unavailable); questions and notifications are refused.")
+		_, _ = fmt.Fprintln(w, "`herdr-hitl here` clears it; `herdr-hitl away` replaces it.")
+		return silentCode(ExitAFK, fmt.Errorf("channel is %s", d.Channel))
+	}
 	_, _ = fmt.Fprintf(w, "herdr-hitl: not %s: %s\n", verb, describe(d))
 	_, _ = fmt.Fprintf(w, "the human is at your own interface, so %s.\n", remedy)
 	_, _ = fmt.Fprintln(w, "`herdr-hitl away` sends questions to the messenger; --channel messenger overrides once.")
@@ -53,7 +59,7 @@ func enforceChannel(cmd *cobra.Command, verb, remedy string, d channel.Decision)
 // describe renders a decision as one line: the channel, and what settled it.
 func describe(d channel.Decision) string {
 	reason := string(d.Reason)
-	if d.Reason == channel.ReasonAway && !d.AwayUntil.IsZero() {
+	if (d.Reason == channel.ReasonAway || d.Reason == channel.ReasonAFK) && !d.AwayUntil.IsZero() {
 		reason = fmt.Sprintf("%s until %s", reason, d.AwayUntil.Format(time.RFC3339))
 	}
 	if d.Reason == channel.ReasonConfig || d.Reason == channel.ReasonFlag {
@@ -138,7 +144,7 @@ func newHereCommand(_ *globals) *cobra.Command {
 	return &cobra.Command{
 		Use:   "here",
 		Short: "Say you are back at the terminal, so questions stay there",
-		Long: "Clear the Away marker. With `channel = \"auto\"` this is what makes\n" +
+		Long: "Clear the Away or AFK marker. With `channel = \"auto\"` this is what makes\n" +
 			"`ask` refuse with exit 5 so the agent asks in its own interface.",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
@@ -147,18 +153,63 @@ func newHereCommand(_ *globals) *cobra.Command {
 			if err != nil {
 				return failf("resolve away marker: %w", err)
 			}
+			marker, _ := channel.ReadMarker(path)
 			existed, err := channel.ClearMarker(path)
 			if err != nil {
 				return failf("%w", err)
 			}
 			if existed {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "away marker cleared")
+				if marker.AFK {
+					_, _ = fmt.Fprintln(cmd.OutOrStdout(), "afk marker cleared")
+				} else {
+					_, _ = fmt.Fprintln(cmd.OutOrStdout(), "away marker cleared")
+				}
 			} else {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "no away marker was set")
 			}
 			return reportChannel(cmd.OutOrStdout())
 		},
 	}
+}
+
+func newAFKCommand(_ *globals) *cobra.Command {
+	var window time.Duration
+	cmd := &cobra.Command{
+		Use:   "afk",
+		Short: "Declare unavailable mode, so questions and notifications are refused",
+		Long: "Set the AFK marker. Active AFK overrides explicit and configured channels,\n" +
+			"resolving to `afk`. Questions and notifications are refused with exit 6\n" +
+			"before reaching the daemon or network, with no answer on stdout and\n" +
+			"no --default approval.\n\n" +
+			"Without --for the marker holds until `herdr-hitl here` clears it or\n" +
+			"`herdr-hitl away` replaces it.",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if window < 0 {
+				return usagef("--for must not be negative")
+			}
+			path, err := paths.AwayFile()
+			if err != nil {
+				return failf("resolve away marker: %w", err)
+			}
+			var until time.Time
+			if window > 0 {
+				until = time.Now().Add(window).Truncate(time.Second)
+			}
+			if err := channel.WriteAFKMarker(path, until); err != nil {
+				return failf("%w", err)
+			}
+			if until.IsZero() {
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "afk marker set, with no expiry")
+			} else {
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "afk marker set until %s\n", until.Format(time.RFC3339))
+			}
+			return reportChannel(cmd.OutOrStdout())
+		},
+	}
+	cmd.Flags().DurationVar(&window, "for", 0, "clear the marker automatically after this long")
+	return cmd
 }
 
 // reportChannel prints the resolved channel after the marker changed.

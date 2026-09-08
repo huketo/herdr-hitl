@@ -46,6 +46,11 @@ func TestExitCode(t *testing.T) {
 			err:  withCode(ExitError, fmt.Errorf("ask: %w", hitl.ErrTimeout)),
 			want: ExitTimeout,
 		},
+		{
+			name: "afk exit code",
+			err:  silentCode(ExitAFK, errors.New("channel is afk")),
+			want: ExitAFK,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -540,7 +545,7 @@ func TestRootCommandTree(t *testing.T) {
 	want := []string{
 		"ask", "notify", "pending", "answer", "cancel", "serve",
 		"daemon", "doctor", "config", "install-cli", "version",
-		"channel", "away", "here",
+		"channel", "away", "here", "afk",
 	}
 	have := make(map[string]*cobra.Command, len(root.Commands()))
 	for _, c := range root.Commands() {

@@ -176,6 +176,10 @@ func addChannelCheck(add func(string, checkState, string, ...any), cfg *config.C
 		add("channel", stateOK, "%s", describe(decision))
 		return
 	}
+	if decision.Channel == channel.AFK {
+		add("channel", stateWarn, "%s; `ask` and `notify` exit 6 without sending. `herdr-hitl here` clears it", describe(decision))
+		return
+	}
 	add("channel", stateWarn, "%s; `ask` exits 5 without sending. `herdr-hitl away` switches it", describe(decision))
 }
 

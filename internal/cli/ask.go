@@ -59,7 +59,7 @@ func newAskCommand(g *globals) *cobra.Command {
 			"With -o text the answer text is the only thing written to stdout, so\n" +
 			"`answer=$(herdr-hitl ask -t 'Deploy?' -c yes -c no)` works. Diagnostics go\n" +
 			"to stderr. Exit codes: 0 answered, 1 error, 2 usage, 3 timeout,\n" +
-			"4 canceled, 5 the human is at the terminal and nothing was sent.",
+			"4 canceled, 5 the human is at the terminal, 6 the human is AFK.",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -86,8 +86,8 @@ func newNotifyCommand(g *globals) *cobra.Command {
 		Long: "Post a one-way message to the configured messengers and return\n" +
 			"immediately. Nothing is written to stdout on success.\n\n" +
 			"Exits 5 without sending anything when the resolved channel is the\n" +
-			"terminal, so a notification cannot reach a phone the operator asked\n" +
-			"it to leave alone.",
+			"terminal, and 6 when the resolved channel is afk, so a notification\n" +
+			"cannot reach a phone the operator asked it to leave alone.",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {

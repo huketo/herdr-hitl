@@ -3,7 +3,7 @@
 // The binary is both the agent-facing client and the resident daemon, so the
 // same command tree covers `ask` (blocking, machine-readable) and `serve`
 // (long-lived). Exit codes are part of the contract an agent scripts against:
-// 0 answered, 1 error, 2 usage, 3 timeout, 4 canceled, 5 terminal channel.
+// 0 answered, 1 error, 2 usage, 3 timeout, 4 canceled, 5 terminal channel, 6 afk.
 package cli
 
 import (
@@ -39,6 +39,10 @@ const (
 	// is the terminal: the human is at the agent's own interface, so the
 	// agent must ask there. It is not a failure and never an approval.
 	ExitTerminal = 5
+	// ExitAFK means the human declared unavailable mode (AFK). Questions and
+	// notifications are refused before reaching the daemon or network, with
+	// no answer on stdout and no --default approval.
+	ExitAFK = 6
 )
 
 // Output formats accepted by -o/--format.
@@ -232,6 +236,7 @@ func newRootCommand(info BuildInfo) (*cobra.Command, *globals) {
 		newChannelCommand(g),
 		newAwayCommand(g),
 		newHereCommand(g),
+		newAFKCommand(g),
 		newVersionCommand(g),
 	)
 	return root, g
