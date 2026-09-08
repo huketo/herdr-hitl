@@ -208,13 +208,13 @@ func (s *service) request(p *ipc.AskParams) (*hitl.Request, error) {
 		Body:          p.Body,
 		Choices:       p.Choices,
 		AllowFreeText: p.AllowFreeText,
-		Timeout:       time.Duration(p.Timeout),
+		Timeout:       s.cfg.Timeout.Duration(),
 		Transports:    p.Transports,
 		Origin:        p.Origin,
 		CreatedAt:     s.now(),
 	}
-	if req.Timeout == 0 {
-		req.Timeout = s.cfg.Timeout.Duration()
+	if p.Timeout != nil {
+		req.Timeout = time.Duration(*p.Timeout)
 	}
 	if len(req.Transports) == 0 {
 		req.Transports = s.cfg.DefaultTransports()

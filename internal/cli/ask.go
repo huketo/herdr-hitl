@@ -134,13 +134,14 @@ func (o *askOptions) build(cmd *cobra.Command, cfg *config.Config, wantAnswer bo
 		timeout = 0
 	}
 
+	wireTimeout := ipc.Duration(timeout)
 	params := &ipc.AskParams{
 		Title:         strings.TrimSpace(o.title),
 		Body:          body,
 		Choices:       choices,
 		AllowFreeText: free,
 		Attachments:   attachments,
-		Timeout:       ipc.Duration(timeout),
+		Timeout:       &wireTimeout,
 		Transports:    transports,
 		Origin:        detectOrigin(o.agent),
 	}

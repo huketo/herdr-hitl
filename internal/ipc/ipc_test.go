@@ -161,12 +161,13 @@ func TestAskRoundTrip(t *testing.T) {
 	}
 	endpoint := startServer(t, h)
 
+	timeout := ipc.Duration(30 * time.Second)
 	resp, err := ipc.Call(t.Context(), endpoint, &ipc.Request{
 		Op: ipc.OpAsk,
 		Ask: &ipc.AskParams{
 			Body:    "Ship it?",
 			Choices: []hitl.Choice{{ID: "approve", Label: "Approve"}},
-			Timeout: ipc.Duration(30 * time.Second),
+			Timeout: &timeout,
 		},
 	})
 	if err != nil {
