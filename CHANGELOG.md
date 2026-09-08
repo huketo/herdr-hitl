@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/huketo/herdr-hitl/compare/v0.2.0...v0.2.1) (2026-09-08)
+
+
+### Bug fixes
+
+* **daemon:** preserve explicit zero timeout through IPC ([#24](https://github.com/huketo/herdr-hitl/issues/24)) ([d594c5e](https://github.com/huketo/herdr-hitl/commit/d594c5eb023fc4bb87b15d87ff8a21124320d164))
+
 ## [0.2.0](https://github.com/huketo/herdr-hitl/compare/v0.1.4...v0.2.0) (2026-09-03)
 
 
