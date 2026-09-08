@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/huketo/herdr-hitl/internal/channel"
 	"github.com/huketo/herdr-hitl/internal/config"
 	"github.com/huketo/herdr-hitl/internal/ipc"
 	"github.com/huketo/herdr-hitl/internal/paths"

@@ -60,7 +60,7 @@ func enforceChannel(cmd *cobra.Command, verb, remedy string, d channel.Decision)
 func describe(d channel.Decision) string {
 	reason := string(d.Reason)
 	if (d.Reason == channel.ReasonAway || d.Reason == channel.ReasonAFK) && !d.AwayUntil.IsZero() {
-		reason = fmt.Sprintf("%s until %s", reason, d.AwayUntil.Format(time.RFC3339))
+		reason = fmt.Sprintf("%s until %s", reason, d.AwayUntil.Format(time.RFC3339Nano))
 	}
 	if d.Reason == channel.ReasonConfig || d.Reason == channel.ReasonFlag {
 		reason = fmt.Sprintf("%s channel = %q", reason, d.Policy)
@@ -72,12 +72,14 @@ func newChannelCommand(_ *globals) *cobra.Command {
 	var format string
 	cmd := &cobra.Command{
 		Use:   "channel",
-		Short: "Print where a question would go: messenger or terminal",
-		Long: "Resolve the routing policy and the Away marker into one channel.\n\n" +
+		Short: "Print the resolved channel: messenger, terminal, or afk",
+		Long: "Resolve the routing policy and the presence marker into one channel.\n\n" +
 			"With -o text the channel is the only thing written to stdout, so\n" +
 			"`[ \"$(herdr-hitl channel)\" = messenger ]` works. `messenger` means\n" +
 			"`ask` delivers; `terminal` means it refuses with exit 5 because the\n" +
-			"human is expected to be at the agent's own interface.",
+			"human is expected to be at the agent's own interface. Active AFK\n" +
+			"overrides the routing policy: `afk` means `ask` and `notify` refuse\n" +
+			"with exit 6 and no answer.",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -195,7 +197,7 @@ func newAFKCommand(_ *globals) *cobra.Command {
 			}
 			var until time.Time
 			if window > 0 {
-				until = time.Now().Add(window).Truncate(time.Second)
+				until = time.Now().Add(window)
 			}
 			if err := channel.WriteAFKMarker(path, until); err != nil {
 				return failf("%w", err)
@@ -203,7 +205,7 @@ func newAFKCommand(_ *globals) *cobra.Command {
 			if until.IsZero() {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "afk marker set, with no expiry")
 			} else {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "afk marker set until %s\n", until.Format(time.RFC3339))
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "afk marker set until %s\n", until.Format(time.RFC3339Nano))
 			}
 			return reportChannel(cmd.OutOrStdout())
 		},

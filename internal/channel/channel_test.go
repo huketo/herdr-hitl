@@ -407,7 +407,7 @@ func TestAFKMarkerRoundTrip(t *testing.T) {
 		t.Fatalf("marker = %+v, want active AFK", m)
 	}
 
-	until := time.Now().Add(time.Hour).Truncate(time.Second)
+	until := time.Date(2026, 9, 8, 12, 0, 0, 123456789, time.UTC)
 	if err := WriteAFKMarker(path, until); err != nil {
 		t.Fatalf("WriteAFKMarker with expiry: %v", err)
 	}
@@ -418,7 +418,7 @@ func TestAFKMarkerRoundTrip(t *testing.T) {
 	if !m.Until.Equal(until) {
 		t.Fatalf("until = %s, want %s", m.Until, until)
 	}
-	if !m.ActiveAFK(until.Add(-time.Minute)) || m.ActiveAFK(until.Add(time.Minute)) {
+	if !m.ActiveAFK(until.Add(-time.Nanosecond)) || m.ActiveAFK(until) {
 		t.Fatalf("marker %+v does not lapse at %s", m, until)
 	}
 

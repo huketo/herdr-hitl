@@ -274,7 +274,7 @@ func WriteMarker(path string, until time.Time) error {
 func WriteAFKMarker(path string, until time.Time) error {
 	body := "afk"
 	if !until.IsZero() {
-		body = "afk " + until.Format(time.RFC3339)
+		body = "afk " + until.Format(time.RFC3339Nano)
 	}
 	return atomicWriteMarker(path, []byte(body+"\n"))
 }

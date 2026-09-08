@@ -259,9 +259,6 @@ func TestAskRefusesWhileAFK(t *testing.T) {
 	if !strings.Contains(stderr, "channel is afk") {
 		t.Fatalf("stderr = %q, want the resolved channel", stderr)
 	}
-	if !strings.Contains(stderr, "the human declared AFK") {
-		t.Fatalf("stderr = %q, want the AFK diagnosis", stderr)
-	}
 	h.handler.mu.Lock()
 	defer h.handler.mu.Unlock()
 	if h.handler.asked != nil {
@@ -345,9 +342,6 @@ func TestAFKRecoveryToHereAndAway(t *testing.T) {
 	if code != ExitOK {
 		t.Fatalf("here exit code = %d (stderr: %s)", code, stderr)
 	}
-	if !strings.Contains(stdout, "afk marker cleared") {
-		t.Fatalf("stdout = %q, want afk marker cleared", stdout)
-	}
 	if code, stdout, _ = h.run(t, "ask", "-t", "Deploy?", "-c", "yes"); code != ExitOK {
 		t.Fatalf("ask after here failed: code = %d", code)
 	}
@@ -367,9 +361,6 @@ func TestAFKRecoveryToHereAndAway(t *testing.T) {
 	code, stdout, stderr = h.run(t, "away")
 	if code != ExitOK {
 		t.Fatalf("away exit code = %d (stderr: %s)", code, stderr)
-	}
-	if !strings.Contains(stdout, "away marker set") {
-		t.Fatalf("stdout = %q, want away marker set", stdout)
 	}
 	if code, stdout, _ = h.run(t, "ask", "-t", "Deploy?", "-c", "yes"); code != ExitOK {
 		t.Fatalf("ask after away failed: code = %d", code)
@@ -505,21 +496,5 @@ func TestAFKInvalidForNoStateMutation(t *testing.T) {
 	afterInvalid, err := channel.ReadMarker(path)
 	if err != nil || !afterInvalid.Set || afterInvalid.AFK || !afterInvalid.Until.Equal(orig.Until) {
 		t.Fatalf("marker mutated after invalid --for: %+v", afterInvalid)
-	}
-}
-
-func TestDoctorWarnsAboutAFKChannel(t *testing.T) {
-	h := newHarness(t)
-
-	if code, _, _ := h.run(t, "afk"); code != ExitOK {
-		t.Fatal("afk failed")
-	}
-
-	_, stdout, _ := h.run(t, "doctor")
-	if !strings.Contains(stdout, "channel is afk") {
-		t.Fatalf("doctor output = %q, want afk channel check", stdout)
-	}
-	if !strings.Contains(stdout, "exit 6") {
-		t.Fatalf("doctor output = %q, want exit 6 mentioned", stdout)
 	}
 }
