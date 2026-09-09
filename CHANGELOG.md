@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/huketo/herdr-hitl/compare/v0.3.1...v0.3.2) (2026-09-09)
+
+
+### Bug fixes
+
+* **skill:** quote the description so strict YAML parsers accept it ([#29](https://github.com/huketo/herdr-hitl/issues/29)) ([f9f8b88](https://github.com/huketo/herdr-hitl/commit/f9f8b8835b021866fb6da4ca56757e13c19a72c1))
+
 ## [0.3.1](https://github.com/huketo/herdr-hitl/compare/v0.3.0...v0.3.1) (2026-09-09)
 
 
