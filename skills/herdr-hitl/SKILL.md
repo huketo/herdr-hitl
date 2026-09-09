@@ -1,6 +1,6 @@
 ---
 name: herdr-hitl
-description: Ask the human a question and block until they answer, in the agent's interface or over Telegram or Discord. Use when a decision, approval, credential, or missing requirement needs a human who may be away from the terminal: a destructive or irreversible action, a real design tradeoff, a value only the human has, a contradictory requirement, or the end of a long unattended run.
+description: "Ask the human a question and block until they answer, in the agent's interface or over Telegram or Discord. Use when a decision, approval, credential, or missing requirement needs a human who may be away from the terminal, such as a destructive or irreversible action, a real design tradeoff, a value only the human has, a contradictory requirement, or the end of a long unattended run."
 ---
 
 # Asking a human
