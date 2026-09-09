@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/huketo/herdr-hitl/compare/v0.3.0...v0.3.1) (2026-09-09)
+
+
+### Documentation
+
+* **skill:** shorten the description to its trigger conditions ([#27](https://github.com/huketo/herdr-hitl/issues/27)) ([d5e5e61](https://github.com/huketo/herdr-hitl/commit/d5e5e616a63599f514ed65387e265044cd3cd1c4))
+
 ## [0.3.0](https://github.com/huketo/herdr-hitl/compare/v0.2.1...v0.3.0) (2026-09-08)
 
 
