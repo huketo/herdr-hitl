@@ -1,6 +1,6 @@
 ---
 name: herdr-hitl
-description: Ask the human a question and block until they answer, either in the agent's interface or over Telegram or Discord. Use when you need a decision, approval, credential, missing requirement, or judgement call you cannot make alone — and especially when the human is away from the terminal and would otherwise never see the prompt. Triggers on needing permission for a destructive or irreversible action, choosing between designs with real tradeoffs, a secret or value only the human has, an ambiguous or contradictory requirement, or announcing the end of a long unattended run.
+description: Ask the human a question and block until they answer, in the agent's interface or over Telegram or Discord. Use when a decision, approval, credential, or missing requirement needs a human who may be away from the terminal: a destructive or irreversible action, a real design tradeoff, a value only the human has, a contradictory requirement, or the end of a long unattended run.
 ---
 
 # Asking a human
