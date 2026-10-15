@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/huketo/herdr-hitl/compare/v0.3.2...v0.4.0) (2026-10-15)
+
+
+### Features
+
+* set the channel policy per Herdr workspace ([#33](https://github.com/huketo/herdr-hitl/issues/33)) ([f5c5aad](https://github.com/huketo/herdr-hitl/commit/f5c5aadd94a03de56f3dd4509cd3fc956bcbf902))
+
 ## [0.3.2](https://github.com/huketo/herdr-hitl/compare/v0.3.1...v0.3.2) (2026-09-09)
 
 
