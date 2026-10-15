@@ -322,3 +322,55 @@ func TestExecRun(t *testing.T) {
 		t.Error("want an error when the binary does not exist")
 	}
 }
+
+func TestWorkspaceLabel(t *testing.T) {
+	t.Parallel()
+
+	var argv []string
+	c := &Client{
+		log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		bin: "/usr/bin/herdr",
+		read: func(_ context.Context, name string, args ...string) ([]byte, error) {
+			argv = append([]string{name}, args...)
+			return []byte(`{"id":"1","result":{"type":"workspace_info","workspace":{"workspace_id":"wED","label":" bivri-agents "}}}`), nil
+		},
+	}
+	label, err := c.WorkspaceLabel(context.Background(), "wED")
+	if err != nil {
+		t.Fatalf("WorkspaceLabel: %v", err)
+	}
+	if label != "bivri-agents" {
+		t.Errorf("label = %q, want the trimmed label", label)
+	}
+	if want := []string{"/usr/bin/herdr", "workspace", "get", "wED"}; !slices.Equal(argv, want) {
+		t.Errorf("argv = %v, want %v", argv, want)
+	}
+}
+
+func TestWorkspaceLabelFailures(t *testing.T) {
+	t.Parallel()
+
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	reply := func(out string, err error) reader {
+		return func(context.Context, string, ...string) ([]byte, error) { return []byte(out), err }
+	}
+	for _, tc := range []struct {
+		name string
+		c    *Client
+		id   string
+		want string
+	}{
+		{"no herdr", &Client{log: quiet}, "wED", ErrUnavailable.Error()},
+		{"no id", &Client{log: quiet, bin: "herdr", read: reply("{}", nil)}, " ", "needs a workspace id"},
+		{"herdr error", &Client{log: quiet, bin: "herdr", read: reply("", errors.New("unknown workspace"))}, "wX", "unknown workspace"},
+		{"not json", &Client{log: quiet, bin: "herdr", read: reply("usage: herdr", nil)}, "wX", "workspace get wX"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			label, err := tc.c.WorkspaceLabel(context.Background(), tc.id)
+			if err == nil || !strings.Contains(err.Error(), tc.want) || label != "" {
+				t.Fatalf("WorkspaceLabel = %q, %v; want no label and an error mentioning %q", label, err, tc.want)
+			}
+		})
+	}
+}

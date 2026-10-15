@@ -42,6 +42,10 @@ The class of destination for a Question. `channel.Channel` is `messenger` (deliv
 
 A resolved Decision is never `auto`: that Policy resolves per Question to `messenger` or `terminal` (or `afk` if AFK is active), in the asking CLI process rather than the shared Daemon. Active AFK overrides explicit and configured messenger/terminal, resolving to `afk`. A `terminal` Decision exits `5` ("ask in your own interface"). An `afk` Decision exits `6` ("human is unavailable; refused before daemon or network"), never approval. See [ADR-0004](docs/adr/0004-channel-routing-by-declared-presence.md).
 
+### Workspace route
+
+The Channel Policy for the Questions of named Herdr workspaces. `config.WorkspaceRoute` lists workspace labels and a Policy; `Config.RouteFor` finds the asking workspace's route, and the CLI uses its Policy in place of `channel` from the config file, below `HITL_CHANNEL` and `--channel`. The Decision's reason is then `workspace route`. The typical route is `terminal` for workspaces whose panes another agent watches and relays. See [ADR-0005](docs/adr/0005-channel-routing-by-herdr-workspace.md).
+
 ### Away marker
 
 The human's declaration of presence state. `channel.Marker` is read from the `away` file in the state directory and records whether it exists, whether it is an Away or AFK declaration, when it expires, and whether its contents were malformed. `herdr-hitl away` writes `forever` or an RFC 3339 expiry; `herdr-hitl afk` writes `afk` or `afk <RFC3339>`; `herdr-hitl here` removes it.
@@ -116,7 +120,7 @@ The Markdown document at `skills/herdr-hitl/SKILL.md` that teaches an agent *whe
 
 ## The ask lifecycle
 
-1. An agent runs `herdr-hitl ask -t … -m … -c …`. The CLI parses flags and resolves a `channel.Decision`: active AFK overrides all settings and resolves to `afk`, which refuses before the daemon or network with exit `6` and no answer on stdout. Otherwise, `--channel`, then `HITL_CHANNEL`, then `channel` in `config.toml`, then the `messenger` default; an `auto` Policy consults the Away marker. A `terminal` Decision sends nothing, prints an instruction to ask in the agent's own interface, and exits `5`. Only a `messenger` Decision continues: the CLI resolves attachment paths into Attachments, fills in Origin from the environment, and builds an `ipc.AskParams`.
+1. An agent runs `herdr-hitl ask -t … -m … -c …`. The CLI parses flags and resolves a `channel.Decision`: active AFK overrides all settings and resolves to `afk`, which refuses before the daemon or network with exit `6` and no answer on stdout. Otherwise, `--channel`, then `HITL_CHANNEL`, then the asking workspace's Workspace route, then `channel` in `config.toml`, then the `messenger` default; an `auto` Policy consults the Away marker. A `terminal` Decision sends nothing, prints an instruction to ask in the agent's own interface, and exits `5`. Only a `messenger` Decision continues: the CLI resolves attachment paths into Attachments, fills in Origin from the environment, and builds an `ipc.AskParams`.
 2. The CLI ensures a Daemon is live: `ipc.Probe` on the Endpoint, and if nothing answers, spawn a detached `serve` and wait for the probe to succeed.
 3. The CLI dials the Endpoint and sends `ipc.OpAsk`. **It holds the connection open for the entire ask.** This is load-bearing: the Daemon derives the Question's context from this connection, so a dead client cancels its own Question.
 4. The Daemon builds a `hitl.Request`, validates it, and calls `Broker.Submit`. The Broker registers the Question as Pending and calls `Post` on each selected Poster.

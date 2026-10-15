@@ -64,6 +64,11 @@ type Config struct {
 	// while the Away marker is set. Empty means "messenger", so an
 	// installation that never sets it keeps delivering questions.
 	Channel string `toml:"channel"`
+	// Workspaces sets the channel policy for questions asked from named Herdr
+	// workspaces. A route outranks `channel` from the config file but not
+	// HITL_CHANNEL, which an unattended launcher uses to declare that nobody
+	// is watching.
+	Workspaces []WorkspaceRoute `toml:"workspace"`
 
 	Telegram Telegram `toml:"telegram"`
 	Discord  Discord  `toml:"discord"`
@@ -72,6 +77,19 @@ type Config struct {
 
 	// source records where the config was read from, for `doctor` output.
 	source string
+	// channelFromEnv records that HITL_CHANNEL set Channel, which a
+	// workspace route must not override.
+	channelFromEnv bool
+}
+
+// WorkspaceRoute is the channel policy for the questions of some Herdr
+// workspaces: for example "terminal" where another agent watches the asking
+// pane and relays its questions, while other workspaces keep the messenger.
+type WorkspaceRoute struct {
+	// Labels are Herdr workspace labels, matched exactly.
+	Labels []string `toml:"labels"`
+	// Channel is "messenger", "terminal", or "auto", as for `channel`.
+	Channel string `toml:"channel"`
 }
 
 // Telegram configures the Telegram Bot API transport.
@@ -149,6 +167,25 @@ func boolOr(v *bool, fallback bool) bool {
 // Source reports the config file the settings came from, or "" for defaults.
 func (c *Config) Source() string { return c.source }
 
+// ChannelFromEnv reports whether HITL_CHANNEL supplied Channel.
+func (c *Config) ChannelFromEnv() bool { return c.channelFromEnv }
+
+// RouteFor returns the route naming the Herdr workspace labelled label.
+func (c *Config) RouteFor(label string) (WorkspaceRoute, bool) {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return WorkspaceRoute{}, false
+	}
+	for _, route := range c.Workspaces {
+		for _, l := range route.Labels {
+			if strings.TrimSpace(l) == label {
+				return route, true
+			}
+		}
+	}
+	return WorkspaceRoute{}, false
+}
+
 // Default returns the zero-config baseline.
 func Default() *Config {
 	return &Config{
@@ -211,6 +248,7 @@ func (c *Config) applyEnv(get func(string) string) {
 	}
 	if v := get("HITL_CHANNEL"); v != "" {
 		c.Channel = v
+		c.channelFromEnv = true
 	}
 	if v := get("HITL_TIMEOUT"); v != "" {
 		var d Duration
@@ -289,6 +327,27 @@ func (c *Config) Validate() error {
 	if strings.TrimSpace(c.Channel) != "" {
 		if _, err := channel.ParsePolicy(c.Channel); err != nil {
 			return fmt.Errorf("config: %w", err)
+		}
+	}
+	seen := make(map[string]int)
+	for i, route := range c.Workspaces {
+		if len(route.Labels) == 0 {
+			return fmt.Errorf("config: workspace route %d names no labels", i+1)
+		}
+		for _, label := range route.Labels {
+			label = strings.TrimSpace(label)
+			if label == "" {
+				return fmt.Errorf("config: workspace route %d has an empty label", i+1)
+			}
+			// One label in two routes would make the earlier route win
+			// silently; a reader editing the later one deserves an error.
+			if first, ok := seen[label]; ok {
+				return fmt.Errorf("config: workspace %q is routed twice (routes %d and %d)", label, first, i+1)
+			}
+			seen[label] = i + 1
+		}
+		if _, err := channel.ParsePolicy(route.Channel); err != nil {
+			return fmt.Errorf("config: workspace route %d: %w", i+1, err)
 		}
 	}
 	if c.Telegram.IsEnabled() {

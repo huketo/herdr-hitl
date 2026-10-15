@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -497,5 +498,101 @@ func TestAFKInvalidForNoStateMutation(t *testing.T) {
 	afterInvalid, err := channel.ReadMarker(path)
 	if err != nil || !afterInvalid.Set || afterInvalid.AFK || !afterInvalid.Until.Equal(orig.Until) {
 		t.Fatalf("marker mutated after invalid --for: %+v", afterInvalid)
+	}
+}
+
+// routeWorkspaces writes a config whose bivri workspaces ask in their own
+// interface while everything else uses the messenger, and stubs the Herdr
+// label lookup with the given id -> label map.
+func routeWorkspaces(t *testing.T, labels map[string]string) *[]string {
+	t.Helper()
+	config := `
+channel = "messenger"
+
+[[workspace]]
+labels = ["bivri", "bivri-agents"]
+channel = "terminal"
+`
+	if err := os.WriteFile(filepath.Join(os.Getenv("HITL_CONFIG_DIR"), "config.toml"), []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var lookups []string
+	previous := workspaceLabel
+	workspaceLabel = func(id string) string { lookups = append(lookups, id); return labels[id] }
+	t.Cleanup(func() { workspaceLabel = previous })
+	return &lookups
+}
+
+// A workspace route keeps a routed workspace's questions in the agent's own
+// interface, where another agent relays them, while other workspaces still
+// reach the messenger. An agent pane exports only HERDR_WORKSPACE_ID, so the
+// label is looked up.
+func TestWorkspaceRouteKeepsItsQuestionsInTheInterface(t *testing.T) {
+	h := newHarness(t)
+	h.handler.answer = &hitl.Answer{Status: hitl.StatusAnswered, Text: "ok"}
+	routeWorkspaces(t, map[string]string{"wB": "bivri", "wH": "home"})
+
+	t.Setenv("HERDR_WORKSPACE_ID", "wB")
+	code, stdout, stderr := h.run(t, "ask", "-t", "Merge?")
+	if code != ExitTerminal || stdout != "" {
+		t.Fatalf("ask from a routed workspace: exit %d, stdout %q; want %d and nothing", code, stdout, ExitTerminal)
+	}
+	if !strings.Contains(stderr, `workspace route channel = "terminal"`) || strings.Contains(stderr, "herdr-hitl away") {
+		t.Fatalf("stderr = %q, want the route named and no Away advice the route would ignore", stderr)
+	}
+	if code, _, _ := h.run(t, "notify", "-t", "done"); code != ExitTerminal {
+		t.Fatalf("notify from a routed workspace: exit %d, want %d", code, ExitTerminal)
+	}
+	h.handler.mu.Lock()
+	if h.handler.asked != nil || h.handler.notified != nil {
+		h.handler.mu.Unlock()
+		t.Fatal("a routed workspace's question reached the daemon")
+	}
+	h.handler.mu.Unlock()
+
+	t.Setenv("HERDR_WORKSPACE_ID", "wH")
+	if code, stdout, stderr := h.run(t, "ask", "-t", "Merge?"); code != ExitOK || stdout != "ok\n" {
+		t.Fatalf("ask from an unrouted workspace: exit %d, stdout %q (stderr %s); want it delivered", code, stdout, stderr)
+	}
+}
+
+// HITL_CHANNEL is how an unattended launcher says nobody watches any pane,
+// so it outranks a route; --channel outranks both.
+func TestWorkspaceRouteRanksBelowTheEnvironmentAndTheFlag(t *testing.T) {
+	h := newHarness(t)
+	h.handler.answer = &hitl.Answer{Status: hitl.StatusAnswered, Text: "ok"}
+	routeWorkspaces(t, map[string]string{"wB": "bivri"})
+	t.Setenv("HERDR_WORKSPACE_ID", "wB")
+
+	if code, _, stderr := h.run(t, "ask", "-t", "x", "--channel", "messenger"); code != ExitOK {
+		t.Fatalf("--channel messenger from a routed workspace: exit %d (%s), want delivery", code, stderr)
+	}
+	t.Setenv("HITL_CHANNEL", "messenger")
+	if code, _, stderr := h.run(t, "ask", "-t", "x"); code != ExitOK {
+		t.Fatalf("HITL_CHANNEL=messenger from a routed workspace: exit %d (%s), want delivery", code, stderr)
+	}
+}
+
+// `channel -o json` is what the harness's ask gate reads, so it must apply the
+// route and say why; a plugin context that carries the label needs no lookup.
+func TestChannelCommandReportsTheWorkspaceRoute(t *testing.T) {
+	h := newHarness(t)
+	lookups := routeWorkspaces(t, map[string]string{})
+	t.Setenv("HERDR_WORKSPACE_ID", "wX")
+	t.Setenv("HERDR_PLUGIN_CONTEXT_JSON", `{"workspace_label":"bivri-agents"}`)
+
+	code, stdout, stderr := h.run(t, "channel", "-o", "json")
+	if code != ExitOK {
+		t.Fatalf("channel: exit %d (%s)", code, stderr)
+	}
+	var got channel.Decision
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("decode %q: %v", stdout, err)
+	}
+	if got.Channel != channel.Terminal || got.Policy != channel.PolicyTerminal || got.Reason != channel.ReasonWorkspace {
+		t.Fatalf("decision = %+v, want terminal from the workspace route", got)
+	}
+	if len(*lookups) != 0 {
+		t.Fatalf("looked the label up (%v) although the plugin context carried it", *lookups)
 	}
 }

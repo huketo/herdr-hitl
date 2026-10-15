@@ -83,7 +83,23 @@ An unattended launcher, such as a scheduler or a detached agent run, should decl
 export HITL_CHANNEL=messenger
 ```
 
-Each `ask` or `notify` resolves its policy in this order: `--channel messenger|terminal|auto`, `HITL_CHANNEL`, `channel` in `config.toml`, then the default `messenger`. `HITL_CHANNEL` and `channel` accept only those three values; an invalid value is a configuration error at load time. If the result is `terminal`, nothing contacts the daemon or messenger; the command explains that the agent must ask in its own interface on stderr and exits `5`. The agent must not treat that status as approval or retry the delivery. Use `--channel messenger` to override one call.
+Each `ask` or `notify` resolves its policy in this order: `--channel messenger|terminal|auto`, `HITL_CHANNEL`, the asking workspace's route (below), `channel` in `config.toml`, then the default `messenger`. `HITL_CHANNEL` and `channel` accept only those three values; an invalid value is a configuration error at load time. If the result is `terminal`, nothing contacts the daemon or messenger; the command explains that the agent must ask in its own interface on stderr and exits `5`. The agent must not treat that status as approval or retry the delivery. Use `--channel messenger` to override one call.
+
+### Route questions by workspace
+
+Some workspaces have someone else watching the agent's pane: a coordinating agent that drives the session and relays its questions to the right people. Their questions belong in that pane, not in your messenger, while other workspaces keep the usual policy. A `[[workspace]]` route sets the channel policy for the named Herdr workspaces:
+
+```toml
+channel = "auto"
+
+[[workspace]]
+labels = ["project-a", "project-a-infra"]
+channel = "terminal"
+```
+
+With this route, `ask` and `notify` from those workspaces exit `5` as the terminal channel does, so the agent asks in its own interface, and `herdr-hitl channel` reports `terminal` with the reason `workspace route`. The Away marker does not move a route set to `terminal` or `messenger`; set the route to `auto` to keep presence routing for those workspaces. A route ranks below `HITL_CHANNEL` and `--channel`, so an unattended launcher that exports `HITL_CHANNEL=messenger` still delivers, and above `channel` in `config.toml`. Active AFK still overrides it.
+
+Labels are Herdr workspace labels, matched exactly, and a label may appear in one route only. An agent pane exports only `HERDR_WORKSPACE_ID`, so the CLI reads the label with `herdr workspace get`; if that lookup fails, the workspace gets no route. Routes are read on every invocation, so adding or removing a label takes effect on the next question. `herdr-hitl doctor` lists the routes.
 
 ## Configuration
 
@@ -113,6 +129,11 @@ channel = "auto"
 transports = ["telegram"]
 # Default deadline for `ask`. 0 waits forever.
 timeout = "30m"
+
+# Questions from these Herdr workspaces use this channel policy instead.
+[[workspace]]
+labels = ["project-a"]
+channel = "terminal"
 
 [telegram]
 enabled = true

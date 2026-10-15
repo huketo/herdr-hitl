@@ -1,13 +1,16 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
 
+	"github.com/huketo/herdr-hitl/internal/herdrctl"
 	"github.com/huketo/herdr-hitl/internal/hitl"
 )
 
@@ -245,6 +248,9 @@ func detectOrigin(agent string) hitl.Origin {
 
 	ctx := loadHerdrContext(os.Getenv("HERDR_PLUGIN_CONTEXT_JSON"))
 	o.WorkspaceLabel = ctx.WorkspaceLabel
+	if o.WorkspaceLabel == "" && o.WorkspaceID != "" {
+		o.WorkspaceLabel = workspaceLabel(o.WorkspaceID)
+	}
 
 	switch {
 	case strings.TrimSpace(agent) != "":
@@ -257,6 +263,19 @@ func detectOrigin(agent string) hitl.Origin {
 		o.Agent = "agent"
 	}
 	return o
+}
+
+// workspaceLabel asks Herdr for the label of a workspace. An agent pane gets
+// only HERDR_WORKSPACE_ID, not the plugin context that carries the label, and
+// the label is what selects a workspace route. A failed lookup yields "", so
+// the question takes the default transports rather than failing. Tests
+// replace it.
+var workspaceLabel = func(workspaceID string) string {
+	label, err := herdrctl.New(slog.New(slog.DiscardHandler)).WorkspaceLabel(context.Background(), workspaceID)
+	if err != nil {
+		return ""
+	}
+	return label
 }
 
 // loadHerdrContext accepts either the JSON document itself or a path to it;

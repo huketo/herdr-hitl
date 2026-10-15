@@ -326,3 +326,73 @@ func TestDurationRoundTrip(t *testing.T) {
 		t.Error("UnmarshalText(\"soon\") = nil, want error")
 	}
 }
+
+func TestWorkspaceRoutes(t *testing.T) {
+	t.Setenv("HITL_CHANNEL", "")
+	cfg, err := config.LoadFrom(writeConfigDir(t, map[string]string{"config.toml": `
+channel = "auto"
+
+[[workspace]]
+labels = ["bivri", "bivri-agents"]
+channel = "terminal"
+
+[[workspace]]
+labels = ["lab"]
+channel = "messenger"
+`}))
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	for _, tc := range []struct {
+		label, want string
+		ok          bool
+	}{
+		{"bivri", "terminal", true},
+		{"bivri-agents", "terminal", true},
+		{"lab", "messenger", true},
+		{"home", "", false},
+		{"", "", false},
+		// Labels match exactly, so a prefix does not inherit a route.
+		{"bivri-old", "", false},
+	} {
+		route, ok := cfg.RouteFor(tc.label)
+		if ok != tc.ok || route.Channel != tc.want {
+			t.Errorf("RouteFor(%q) = %q, %t; want %q, %t", tc.label, route.Channel, ok, tc.want, tc.ok)
+		}
+	}
+	if cfg.ChannelFromEnv() {
+		t.Error("ChannelFromEnv() = true for a channel read from the file")
+	}
+	t.Setenv("HITL_CHANNEL", "messenger")
+	cfg, err = config.LoadFrom(writeConfigDir(t, map[string]string{"config.toml": `channel = "auto"`}))
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	if !cfg.ChannelFromEnv() || cfg.Channel != "messenger" {
+		t.Errorf("HITL_CHANNEL: Channel %q, ChannelFromEnv %t; want messenger from the environment", cfg.Channel, cfg.ChannelFromEnv())
+	}
+}
+
+func TestValidateRejectsAmbiguousOrIncompleteWorkspaceRoutes(t *testing.T) {
+	t.Setenv("HITL_CHANNEL", "")
+	for _, tc := range []struct {
+		name, routes, want string
+	}{
+		{"no labels", "[[workspace]]\nchannel = \"terminal\"\n", "names no labels"},
+		{"blank label", "[[workspace]]\nlabels = [\" \"]\nchannel = \"terminal\"\n", "empty label"},
+		{"no channel", "[[workspace]]\nlabels = [\"a\"]\n", "workspace route 1: unknown channel"},
+		{"bad channel", "[[workspace]]\nlabels = [\"a\"]\nchannel = \"phone\"\n", `unknown channel "phone"`},
+		{
+			"label in two routes",
+			"[[workspace]]\nlabels = [\"a\", \"b\"]\nchannel = \"terminal\"\n[[workspace]]\nlabels = [\"b\"]\nchannel = \"messenger\"\n",
+			`workspace "b" is routed twice (routes 1 and 2)`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := config.LoadFrom(writeConfigDir(t, map[string]string{"config.toml": tc.routes}))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("LoadFrom error = %v, want it to mention %q", err, tc.want)
+			}
+		})
+	}
+}

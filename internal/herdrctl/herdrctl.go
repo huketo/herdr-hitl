@@ -1,6 +1,8 @@
 // Package herdrctl calls back into the Herdr CLI so a pending question is
 // visible inside the terminal the agent runs in: a toast when the question is
-// posted, and a `$hitl` token on the asking pane while it is outstanding.
+// posted, and a `$hitl` token on the asking pane while it is outstanding. It
+// also reads the label of the workspace a question is asked from, which
+// selects the workspace's transports.
 //
 // Every call is best-effort. Herdr may not be installed, may not be running,
 // and its CLI surface may lag the plugin. A human decision must never fail
@@ -10,6 +12,7 @@ package herdrctl
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -67,12 +70,17 @@ var ErrUnavailable = errors.New("herdrctl: herdr binary not found")
 // keeps argv construction testable without a Herdr installation.
 type runner func(ctx context.Context, name string, args ...string) error
 
+// reader executes a Herdr query and returns its stdout. It is the seam the
+// tests replace for commands whose answer the caller needs.
+type reader func(ctx context.Context, name string, args ...string) ([]byte, error)
+
 // Client invokes the Herdr CLI.
 type Client struct {
 	log *slog.Logger
 	// bin is the resolved binary path, or "" when Herdr is unavailable.
-	bin string
-	run runner
+	bin  string
+	run  runner
+	read reader
 }
 
 // New resolves the Herdr binary once, at daemon startup, and returns a client
@@ -85,7 +93,7 @@ func New(log *slog.Logger) *Client {
 	if bin == "" {
 		log.Debug("herdr cli not found; notifications and pane tokens are disabled")
 	}
-	return &Client{log: log, bin: bin, run: execRun}
+	return &Client{log: log, bin: bin, run: execRun, read: execOutput}
 }
 
 // Available reports whether a Herdr binary was found. `doctor` prints it, and
@@ -149,6 +157,36 @@ func (c *Client) ClearPaneToken(ctx context.Context, paneID, name string) error 
 		"--source", Source, "--clear-token", name)
 }
 
+// WorkspaceLabel returns the label of the Herdr workspace with the given id,
+// as `herdr workspace get` reports it.
+func (c *Client) WorkspaceLabel(ctx context.Context, workspaceID string) (string, error) {
+	if !c.Available() {
+		return "", ErrUnavailable
+	}
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == "" {
+		return "", errors.New("herdrctl: workspace lookup needs a workspace id")
+	}
+	ctx, cancel := context.WithTimeout(ctx, execTimeout)
+	defer cancel()
+
+	out, err := c.read(ctx, c.bin, "workspace", "get", workspaceID)
+	if err != nil {
+		return "", fmt.Errorf("herdr workspace get %s: %w", workspaceID, err)
+	}
+	var reply struct {
+		Result struct {
+			Workspace struct {
+				Label string `json:"label"`
+			} `json:"workspace"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(out, &reply); err != nil {
+		return "", fmt.Errorf("herdr workspace get %s: %w", workspaceID, err)
+	}
+	return strings.TrimSpace(reply.Result.Workspace.Label), nil
+}
+
 // exec bounds the call and hands it to the runner. The deadline is applied
 // here, not in the runner, so injected runners inherit it too.
 func (c *Client) exec(ctx context.Context, args ...string) error {
@@ -174,6 +212,21 @@ func execRun(ctx context.Context, name string, args ...string) error {
 		return err
 	}
 	return nil
+}
+
+// execOutput is the production reader: execRun, keeping stdout.
+func execOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return nil, fmt.Errorf("%w: %s", err, firstLine(msg))
+		}
+		return nil, err
+	}
+	return stdout.Bytes(), nil
 }
 
 // resolveBin prefers the binary Herdr told us about; otherwise it looks for
