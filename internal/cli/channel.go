@@ -14,10 +14,15 @@ import (
 
 // resolveChannel decides whether this invocation may reach a messenger.
 //
+// The configured policy is HITL_CHANNEL, else the route of the Herdr workspace
+// labelled workspaceLabel, else `channel` from the config file. A route ranks
+// below HITL_CHANNEL because an unattended launcher sets it to declare that
+// nobody is watching any pane.
+//
 // The only value that can still be invalid here is the flag: a bad config or
 // environment value is rejected by config.Validate while the file is loaded,
 // which is why the error is reported as a usage error.
-func resolveChannel(explicit string, cfg *config.Config) (channel.Decision, error) {
+func resolveChannel(explicit string, cfg *config.Config, workspaceLabel string) (channel.Decision, error) {
 	path, err := paths.AwayFile()
 	if err != nil {
 		return channel.Decision{}, failf("resolve away marker: %w", err)
@@ -26,9 +31,18 @@ func resolveChannel(explicit string, cfg *config.Config) (channel.Decision, erro
 	if err != nil {
 		return channel.Decision{}, failf("%w", err)
 	}
-	decision, err := channel.Resolve(explicit, cfg.Channel, marker, time.Now())
+	configured, routed := cfg.Channel, false
+	if !cfg.ChannelFromEnv() {
+		if route, ok := cfg.RouteFor(workspaceLabel); ok {
+			configured, routed = route.Channel, true
+		}
+	}
+	decision, err := channel.Resolve(explicit, configured, marker, time.Now())
 	if err != nil {
 		return channel.Decision{}, usagef("--channel: %w", err)
+	}
+	if routed && decision.Reason == channel.ReasonConfig {
+		decision.Reason = channel.ReasonWorkspace
 	}
 	return decision, nil
 }
@@ -51,6 +65,12 @@ func enforceChannel(cmd *cobra.Command, verb, remedy string, d channel.Decision)
 		return silentCode(ExitAFK, fmt.Errorf("channel is %s", d.Channel))
 	}
 	_, _ = fmt.Fprintf(w, "herdr-hitl: not %s: %s\n", verb, describe(d))
+	if d.Reason == channel.ReasonWorkspace {
+		// The route is a fixed policy, so the Away marker does not move it.
+		_, _ = fmt.Fprintf(w, "this workspace's questions belong in your own interface, so %s.\n", remedy)
+		_, _ = fmt.Fprintln(w, "--channel messenger overrides once.")
+		return silentCode(ExitTerminal, fmt.Errorf("channel is %s", d.Channel))
+	}
 	_, _ = fmt.Fprintf(w, "the human is at your own interface, so %s.\n", remedy)
 	_, _ = fmt.Fprintln(w, "`herdr-hitl away` sends questions to the messenger; --channel messenger overrides once.")
 	return silentCode(ExitTerminal, fmt.Errorf("channel is %s", d.Channel))
@@ -62,7 +82,7 @@ func describe(d channel.Decision) string {
 	if (d.Reason == channel.ReasonAway || d.Reason == channel.ReasonAFK) && !d.AwayUntil.IsZero() {
 		reason = fmt.Sprintf("%s until %s", reason, d.AwayUntil.Format(time.RFC3339Nano))
 	}
-	if d.Reason == channel.ReasonConfig || d.Reason == channel.ReasonFlag {
+	if d.Reason == channel.ReasonConfig || d.Reason == channel.ReasonFlag || d.Reason == channel.ReasonWorkspace {
 		reason = fmt.Sprintf("%s channel = %q", reason, d.Policy)
 	}
 	return fmt.Sprintf("channel is %s (%s)", d.Channel, reason)
@@ -90,7 +110,7 @@ func newChannelCommand(_ *globals) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			decision, err := resolveChannel("", cfg)
+			decision, err := resolveChannel("", cfg, detectOrigin("").WorkspaceLabel)
 			if err != nil {
 				return err
 			}
@@ -224,7 +244,7 @@ func reportChannel(w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	decision, err := resolveChannel("", cfg)
+	decision, err := resolveChannel("", cfg, detectOrigin("").WorkspaceLabel)
 	if err != nil {
 		return err
 	}

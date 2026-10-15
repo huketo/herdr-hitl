@@ -100,7 +100,7 @@ func newNotifyCommand(g *globals) *cobra.Command {
 
 // build turns the flags into wire parameters, failing fast on anything the
 // daemon would only discover at upload time.
-func (o *askOptions) build(cmd *cobra.Command, cfg *config.Config, wantAnswer bool) (*ipc.AskParams, error) {
+func (o *askOptions) build(cmd *cobra.Command, cfg *config.Config, origin hitl.Origin, wantAnswer bool) (*ipc.AskParams, error) {
 	stdin := cmd.InOrStdin()
 	body, err := resolveBody(o.message, o.messageFile, o.title, stdin, isTerminal(stdin))
 	if err != nil {
@@ -140,7 +140,7 @@ func (o *askOptions) build(cmd *cobra.Command, cfg *config.Config, wantAnswer bo
 		AllowFreeText: free,
 		Attachments:   attachments,
 		Transports:    transports,
-		Origin:        detectOrigin(o.agent),
+		Origin:        origin,
 	}
 
 	if wantAnswer {
@@ -196,14 +196,15 @@ func runAsk(cmd *cobra.Command, g *globals, o *askOptions) error {
 	if err != nil {
 		return err
 	}
-	decision, err := resolveChannel(o.channel, cfg)
+	origin := detectOrigin(o.agent)
+	decision, err := resolveChannel(o.channel, cfg, origin.WorkspaceLabel)
 	if err != nil {
 		return err
 	}
 	if err := enforceChannel(cmd, "asking", "ask there instead", decision); err != nil {
 		return err
 	}
-	params, err := o.build(cmd, cfg, true)
+	params, err := o.build(cmd, cfg, origin, true)
 	if err != nil {
 		return err
 	}
@@ -283,14 +284,15 @@ func runNotify(cmd *cobra.Command, g *globals, o *askOptions) error {
 	if err != nil {
 		return err
 	}
-	decision, err := resolveChannel(o.channel, cfg)
+	origin := detectOrigin(o.agent)
+	decision, err := resolveChannel(o.channel, cfg, origin.WorkspaceLabel)
 	if err != nil {
 		return err
 	}
 	if err := enforceChannel(cmd, "notifying", "say it in your own output instead", decision); err != nil {
 		return err
 	}
-	params, err := o.build(cmd, cfg, false)
+	params, err := o.build(cmd, cfg, origin, false)
 	if err != nil {
 		return err
 	}

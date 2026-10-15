@@ -52,6 +52,16 @@ timeout = "30m"
 # launcher (a scheduler, a detached run) declares that nobody is watching.
 channel = "messenger"
 
+# Workspace routes. Questions asked from a Herdr workspace whose label is
+# listed use the route's channel instead of ` + "`channel`" + `, for example
+# "terminal" where another agent watches the asking pane and relays its
+# questions. HITL_CHANNEL and --channel still win. A label may appear in one
+# route only.
+#
+# [[workspace]]
+# labels = ["project-a", "project-a-infra"]
+# channel = "terminal"
+
 [telegram]
 # enabled = true
 # Token from @BotFather.
@@ -186,6 +196,11 @@ func writeMaskedConfig(w io.Writer, cfg *config.Config) error {
 	fmt.Fprintf(&b, "transports = %s\n", tomlStrings(cfg.Transports))
 	fmt.Fprintf(&b, "timeout = %q\n", cfg.Timeout.String())
 	fmt.Fprintf(&b, "channel = %q\n", channelOr(cfg.Channel))
+	for _, route := range cfg.Workspaces {
+		fmt.Fprintf(&b, "\n[[workspace]]\n")
+		fmt.Fprintf(&b, "labels = %s\n", tomlStrings(route.Labels))
+		fmt.Fprintf(&b, "channel = %q\n", route.Channel)
+	}
 
 	fmt.Fprintf(&b, "\n[telegram]\n")
 	fmt.Fprintf(&b, "enabled = %t\n", cfg.Telegram.IsEnabled())

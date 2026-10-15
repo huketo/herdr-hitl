@@ -89,7 +89,23 @@ herdr-hitl afk --for 2h
 export HITL_CHANNEL=messenger
 ```
 
-각 `ask` 또는 `notify`의 정책은 `--channel messenger|terminal|auto`, `HITL_CHANNEL`, `config.toml`의 `channel`, 기본값인 `messenger` 순서로 결정됩니다. `HITL_CHANNEL`과 `channel`에는 이 세 값만 사용할 수 있으며, 다른 값을 사용하면 설정을 불러올 때 오류가 발생합니다. 결과가 `terminal`이면 Daemon이나 메신저에 아무것도 전달하지 않습니다. 명령은 에이전트가 현재 인터페이스에서 직접 질문해야 한다는 설명을 stderr에 쓰고 종료 코드 `5`로 끝납니다. 에이전트는 이 상태를 승인으로 처리하거나 전달을 재시도해서는 안 됩니다. 한 번의 호출만 재정의하려면 `--channel messenger`를 사용하십시오.
+각 `ask` 또는 `notify`의 정책은 `--channel messenger|terminal|auto`, `HITL_CHANNEL`, 질문한 작업 공간의 경로(아래), `config.toml`의 `channel`, 기본값인 `messenger` 순서로 결정됩니다. `HITL_CHANNEL`과 `channel`에는 이 세 값만 사용할 수 있으며, 다른 값을 사용하면 설정을 불러올 때 오류가 발생합니다. 결과가 `terminal`이면 Daemon이나 메신저에 아무것도 전달하지 않습니다. 명령은 에이전트가 현재 인터페이스에서 직접 질문해야 한다는 설명을 stderr에 쓰고 종료 코드 `5`로 끝납니다. 에이전트는 이 상태를 승인으로 처리하거나 전달을 재시도해서는 안 됩니다. 한 번의 호출만 재정의하려면 `--channel messenger`를 사용하십시오.
+
+### 작업 공간별로 질문 전달하기
+
+어떤 작업 공간은 에이전트의 pane을 다른 누군가가 지켜봅니다. 세션을 이끌면서 질문을 알맞은 사람에게 전해 주는 조정 에이전트가 그 예입니다. 그런 작업 공간의 질문은 메신저가 아니라 그 pane에서 해야 하고, 다른 작업 공간은 평소 정책을 따릅니다. `[[workspace]]` 경로는 이름을 적은 Herdr 작업 공간의 채널 정책을 정합니다.
+
+```toml
+channel = "auto"
+
+[[workspace]]
+labels = ["project-a", "project-a-infra"]
+channel = "terminal"
+```
+
+이 경로가 있으면 그 작업 공간의 `ask`와 `notify`는 terminal 채널과 같이 종료 코드 `5`로 끝나므로 에이전트는 자기 인터페이스에서 묻습니다. `herdr-hitl channel`은 이유 `workspace route`와 함께 `terminal`을 보고합니다. `terminal`이나 `messenger`로 정한 경로는 Away marker의 영향을 받지 않습니다. 그 작업 공간에도 현재 위치에 따른 전달을 쓰려면 경로를 `auto`로 정하십시오. 경로는 `HITL_CHANNEL`과 `--channel`보다 낮으므로 `HITL_CHANNEL=messenger`를 내보내는 무인 실행기는 여전히 메신저로 보내고, `config.toml`의 `channel`보다는 높습니다. 활성 AFK는 여전히 경로보다 우선합니다.
+
+레이블은 Herdr 작업 공간 레이블이며 정확히 일치해야 하고, 한 레이블은 경로 하나에만 적을 수 있습니다. 에이전트 pane에는 `HERDR_WORKSPACE_ID`만 있으므로 CLI는 `herdr workspace get`으로 레이블을 읽습니다. 조회에 실패하면 그 작업 공간에는 경로가 없는 것으로 봅니다. 경로는 호출할 때마다 읽으므로 레이블을 넣거나 빼면 다음 질문부터 적용됩니다. `herdr-hitl doctor`가 경로를 보여 줍니다.
 
 ## 설정
 
@@ -119,6 +135,11 @@ channel = "auto"
 transports = ["telegram"]
 # ask의 기본 마감. 0이면 무한정 기다립니다.
 timeout = "30m"
+
+# 이 Herdr 작업 공간의 질문은 이 채널 정책을 따릅니다.
+[[workspace]]
+labels = ["project-a"]
+channel = "terminal"
 
 [telegram]
 enabled = true

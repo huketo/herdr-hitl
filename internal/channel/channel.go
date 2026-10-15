@@ -62,6 +62,10 @@ const (
 	ReasonDefault Reason = "default"
 	// ReasonAFK: the human declared unavailable mode (AFK).
 	ReasonAFK Reason = "afk marker"
+	// ReasonWorkspace: a workspace route named the channel for the Herdr
+	// workspace the question is asked from. Resolve never sets it; the
+	// caller that chose the route's value as the configured one does.
+	ReasonWorkspace Reason = "workspace route"
 )
 
 // Decision is the resolved routing outcome and the reason for it.

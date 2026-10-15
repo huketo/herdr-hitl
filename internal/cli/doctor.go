@@ -168,7 +168,10 @@ func runChecks(ctx context.Context, g *globals) *report {
 // perfectly configured transport that never receives a question is the one
 // symptom this report exists to explain.
 func addChannelCheck(add func(string, checkState, string, ...any), cfg *config.Config) {
-	decision, err := resolveChannel("", cfg)
+	for _, route := range cfg.Workspaces {
+		add("workspace", stateOK, "%s -> channel %s", strings.Join(route.Labels, ", "), route.Channel)
+	}
+	decision, err := resolveChannel("", cfg, detectOrigin("").WorkspaceLabel)
 	if err != nil {
 		add("channel", stateFail, "%v", err)
 		return
@@ -179,6 +182,10 @@ func addChannelCheck(add func(string, checkState, string, ...any), cfg *config.C
 	}
 	if decision.Channel == channel.AFK {
 		add("channel", stateWarn, "%s; `ask` and `notify` exit 6 without sending. `herdr-hitl here` clears it", describe(decision))
+		return
+	}
+	if decision.Reason == channel.ReasonWorkspace {
+		add("channel", stateOK, "%s; `ask` exits 5 so this workspace's agents ask in their own interface", describe(decision))
 		return
 	}
 	add("channel", stateWarn, "%s; `ask` exits 5 without sending. `herdr-hitl away` switches it", describe(decision))
